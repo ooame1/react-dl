@@ -1,0 +1,13 @@
+.editorconfig
+.eslintignore
+.eslintrc.js
+.gitignore
+.npmignore
+.prettierrc
+tsconfig.json
+.github/
+/example/
+.travis.yml
+.vscode/
+.idea/
+yarn-error.log
