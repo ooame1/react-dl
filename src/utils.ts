@@ -1,57 +1,25 @@
-import React, { ReactNode } from 'react';
-import { Layout, Fragment, Item, Shape, LayoutDirection } from './types';
+import {
+  Layout,
+  LayoutItem,
+  Position,
+  Size,
+  LayoutDirection,
+  RequiredLayoutMap,
+  RequiredLayoutItemMap,
+  RequiredLayout,
+  Key,
+  RequiredLayoutItem,
+} from './types';
 
-// children缓存
-const ChildrenKeyMap = new WeakMap<any, any>();
+// 根布局key
+export const ROOT_LAYOUT_KEY = 'ROOT';
 
 /**
  * 类型断言
  * @param node 布局节点或片段节点
  */
-export function typeToLayout(node: Layout | Fragment): node is Layout {
+export function typeToLayout(node: Layout | LayoutItem): node is Layout {
   return node.type === 'layout';
-}
-
-/**
- * 从children中解析初始布局结构
- * @param children react元素的children对象
- */
-export function synchronizeLayoutWithChildren(children: ReactNode | undefined): Layout {
-  return {
-    type: 'layout',
-    direction: 'horizontal',
-    children:
-      React.Children.map<Fragment, any>(
-        children,
-        (child, index) =>
-          ({
-            type: 'fragment',
-            key: child?.key || index,
-          } as Fragment)
-      ) || [],
-  };
-}
-
-/**
- * 从children中获取child
- * @param key
- * @param children
- */
-export function getChild(key: number | string, children: ReactNode | undefined) {
-  if (!children || typeof children !== 'object') {
-    return null;
-  }
-  let keyChildMap: Map<number | string, any> = null!;
-  if (ChildrenKeyMap.has(children)) {
-    keyChildMap = ChildrenKeyMap.get(children);
-  } else {
-    keyChildMap = new Map<number | string, any>();
-    React.Children.forEach<any>(children, (child, index) => {
-      keyChildMap.set(child?.key || index, child);
-    });
-    ChildrenKeyMap.set(children, keyChildMap);
-  }
-  return keyChildMap.get(key);
 }
 
 /**
@@ -61,15 +29,15 @@ export function getChild(key: number | string, children: ReactNode | undefined) 
  * @param layoutShape
  */
 export function formatLayoutChildren(
-  layoutChildren: Array<Fragment | Layout>,
+  layoutChildren: Array<LayoutItem | Layout>,
   layoutDirection: LayoutDirection,
-  layoutShape: Shape
-): Array<Required<Fragment> | Required<Layout>> {
-  const formatChildren: Array<Fragment | Layout> = [...layoutChildren];
-  const reShapeChildren: Array<Fragment | Layout> = [];
+  layoutShape: Size
+): Array<Required<LayoutItem> | Required<Layout>> {
+  const formatChildren: Array<LayoutItem | Layout> = [...layoutChildren];
+  const reShapeChildren: Array<LayoutItem | Layout> = [];
   let reShapeCount = layoutDirection === 'horizontal' ? layoutShape.width : layoutShape.height;
   for (let i = 0; i < formatChildren.length; i++) {
-    const newChild =  {...formatChildren[i]};
+    const newChild = { ...formatChildren[i] };
     formatChildren[i] = newChild;
     if (layoutDirection === 'vertical' && !newChild.width) {
       newChild.width = layoutShape.width;
@@ -88,7 +56,7 @@ export function formatLayoutChildren(
       newChild.direction = 'horizontal';
     }
   }
-  reShapeChildren.forEach(child => {
+  reShapeChildren.forEach((child) => {
     if (layoutDirection === 'vertical') {
       Object.assign(child, {
         height: reShapeCount / reShapeChildren.length,
@@ -99,47 +67,52 @@ export function formatLayoutChildren(
       });
     }
   });
-  return formatChildren as Array<Required<Fragment> | Required<Layout>>;
+  return formatChildren as Array<Required<LayoutItem> | Required<Layout>>;
 }
 
-/**
- * 将树形结构转换为渲染数据
- * @param layout 树形布局数据
- * @param containerShape 父级形状
- * @returns
- */
-export function convertLayoutToRenderData(layout: Layout, containerShape: Shape): Array<Item> {
-  const result: Array<Item> = [];
+export function convertLayoutToMap(
+  layout: Layout,
+  position: Position,
+  rootLayoutKey = ROOT_LAYOUT_KEY
+): [RequiredLayoutMap, RequiredLayoutItemMap] {
+  const requiredLayoutMap: RequiredLayoutMap = new Map<Key, RequiredLayout>();
+  const requiredLayoutItemMap: RequiredLayoutItemMap = new Map<Key, RequiredLayoutItem>();
   const direction = layout.direction || 'horizontal';
-  let offset = 0;
-  formatLayoutChildren(layout.children, direction, containerShape).forEach(
+  const requiredLayout: RequiredLayout = {
+    key: rootLayoutKey,
+    position,
+    direction,
+    children: [],
+  };
+  let offset = direction === 'horizontal' ? position.x : position.y;
+  requiredLayoutMap.set(rootLayoutKey, requiredLayout);
+  formatLayoutChildren(layout.children, layout.direction || 'horizontal', position).forEach(
     (cur, index) => {
+      const subPosition: Position = {
+        width: cur.width,
+        height: cur.height,
+        x: direction === 'horizontal' ? offset : position.x,
+        y: direction === 'horizontal' ? position.y : offset,
+      };
+      offset += direction === 'horizontal' ? cur.width : cur.height;
       if (typeToLayout(cur)) {
-        result.push(
-          ...convertLayoutToRenderData(cur, {
-            width: cur.width,
-            height: cur.height,
-          }).map(item => ({
-            ...item,
-            x: direction === 'horizontal' ? item.x + offset : item.x,
-            y: direction === 'vertical' ? item.y + offset: item.y,
-          }))
-        );
-      } else {
-        result.push({
-          key: cur.key,
-          width: cur.width,
-          height: cur.height,
-          x: direction === 'horizontal' ? offset : 0,
-          y: direction === 'vertical' ? offset : 0,
+        const layoutKey = `${rootLayoutKey}_${index}`;
+        const [subLayoutMap, subLayoutItemMap] = convertLayoutToMap(cur, subPosition, layoutKey);
+        requiredLayout.children.push(layoutKey);
+        subLayoutMap.forEach((value, key) => {
+          requiredLayoutMap.set(key, value);
         });
-      }
-      if (direction === 'horizontal') {
-        offset += cur.width;
+        subLayoutItemMap.forEach((value, key) => {
+          requiredLayoutItemMap.set(key, value);
+        });
       } else {
-        offset += cur.height;
+        requiredLayoutItemMap.set(cur.key, {
+          key: cur.key,
+          layout: rootLayoutKey,
+          position: subPosition,
+        });
       }
     }
   );
-  return result;
+  return [requiredLayoutMap, requiredLayoutItemMap];
 }

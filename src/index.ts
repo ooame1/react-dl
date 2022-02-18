@@ -1,3 +1,3 @@
-import ReactDragLayout from './Layout';
+import ReactDragLayout from './ReactDragLayout';
 
 export default ReactDragLayout;
