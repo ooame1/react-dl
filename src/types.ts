@@ -10,6 +10,16 @@ export type Size = {
   height: number;
 }
 
+export type Resize = {
+  width: number;
+  height: number;
+}
+
+export type Reposition = {
+  x: number;
+  y: number;
+}
+
 // 布局节点
 export type Layout = {
   type: 'layout';
@@ -17,8 +27,6 @@ export type Layout = {
   height?: number;
   children: Array<LayoutItem | Layout>;
   direction?: LayoutDirection;
-  father?: Layout;
-  index?: number;
 }
 
 // 片段节点
@@ -27,8 +35,6 @@ export type LayoutItem = {
   width?: number;
   height?: number;
   key: Key;
-  father: Layout;
-  index: number;
 }
 
 // 位置
@@ -59,3 +65,27 @@ export type RequiredLayoutMap = Map<Key, RequiredLayout>;
 
 // 保存全部布局单位的表
 export type RequiredLayoutItemMap = Map<Key, RequiredLayoutItem>;
+
+/**
+ * 数据结构
+ * 1. 树状结构
+ * 优点: 不需要维护position
+ * 缺点: 难以复制和更新父级layout
+ * {
+ *   type: 'layout';
+ *   width: number;
+ *   height: number;
+ *   direction: 'horizontal',
+ *   children: [
+ *     {
+ *       type: 'fragment',
+ *       width: number,
+ *       height: number,
+ *       key: string,
+ *     }
+ *   ]
+ * }
+ * 2. 图状结构
+ * 优点: 容易复制和精确更新layout
+ * 缺点: 更新时难以维护position
+ */
