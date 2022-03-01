@@ -1,91 +1,58 @@
-// layout或layoutItem的唯一键
 export type Key = string;
 
-// 布局方向
-export type LayoutDirection = 'vertical' | 'horizontal';
+export type Direction = 'vertical' | 'horizontal';
 
 // 盒子
 export type Size = {
   width: number;
   height: number;
-}
-
-export type Resize = {
-  width: number;
-  height: number;
-}
-
-export type Reposition = {
-  x: number;
-  y: number;
-}
-
-// 布局节点
-export type Layout = {
-  type: 'layout';
-  width?: number;
-  height?: number;
-  children: Array<LayoutItem | Layout>;
-  direction?: LayoutDirection;
-}
-
-// 片段节点
-export type LayoutItem = {
-  type: 'fragment';
-  width?: number;
-  height?: number;
-  key: Key;
-}
+};
 
 // 位置
-export type Position = {
-  width: number;
-  height: number;
+export type Offset = {
   x: number;
   y: number;
-}
+};
 
-// 包含位置的布局
+// 布局容器
+export type Layout = {
+  key?: Key;
+  type: 'layout';
+  children?: Array<Layout | Item>;
+  direction?: Direction;
+  width?: number;
+  height?: number;
+};
+
+// 布局元素
+export type Item = {
+  key: Key;
+  type: 'item';
+  width?: number;
+  height?: number;
+};
+
+// 布局容器
 export type RequiredLayout = {
   key: Key;
-  direction: LayoutDirection;
-  position: Position;
-  children: Array<Key | RequiredLayoutItem>;
+  type: 'layout';
+  children: Array<RequiredLayout | RequiredItem>;
+  direction: Direction;
+  width: number;
+  height: number;
 }
 
-// 包含位置信息的布局单位
-export type RequiredLayoutItem = {
+// 布局元素
+export type RequiredItem = {
   key: Key;
-  position: Position;
-  layout: Key;
-}
+  type: 'item';
+  width: number;
+  height: number;
+};
 
-// 保存全部布局的表
-export type RequiredLayoutMap = Map<Key, RequiredLayout>;
+// 布局元素位置和尺寸
+export type Position = {
+  key: Key;
+} & Size & Offset;
 
-// 保存全部布局单位的表
-export type RequiredLayoutItemMap = Map<Key, RequiredLayoutItem>;
-
-/**
- * 数据结构
- * 1. 树状结构
- * 优点: 不需要维护position
- * 缺点: 难以复制和更新父级layout
- * {
- *   type: 'layout';
- *   width: number;
- *   height: number;
- *   direction: 'horizontal',
- *   children: [
- *     {
- *       type: 'fragment',
- *       width: number,
- *       height: number,
- *       key: string,
- *     }
- *   ]
- * }
- * 2. 图状结构
- * 优点: 容易复制和精确更新layout
- * 缺点: 更新时难以维护position
- */
+export type PositionMap = Map<string, Position>;

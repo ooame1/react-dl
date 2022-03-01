@@ -1,6 +1,12 @@
-import React, { Component, CSSProperties, MouseEventHandler } from 'react';
-import { LayoutDirection, Position } from '../types';
-import { renderPosition } from '../utils';
+import React, { CSSProperties, MouseEventHandler } from 'react';
+import { Position, RequiredLayout } from '../types';
+import {
+  renderPosition,
+  findChildIndex,
+  getFatherLayoutByItemKey,
+  dragItem,
+  cloneLayoutWith,
+} from '../utils';
 
 type MousePosition = {
   x: number;
@@ -8,57 +14,65 @@ type MousePosition = {
 };
 
 type Props = {
-  dividerHidden?: boolean;
-  itemPosition: Position;
-  direction: LayoutDirection;
-  onDragStart: () => void;
-  onDrag: (moved: number) => void;
-  onDragEnd: (moved: number) => void;
+  position?: Position;
+  baseLayout: RequiredLayout;
+  layout: RequiredLayout;
+  onDragStart?: () => void;
+  onDrag?: () => void;
+  onDragEnd?: () => void;
+  onBaseLayoutChange: (baseLayout: RequiredLayout) => void;
+  onLayoutChange: (layout: RequiredLayout) => void;
 };
 
 type State = {};
 
 const DIVIDER_WIDTH = 5;
 
-/**
- * 1. 从child解析出位置
- * 2. 根据方向确定拖拽线的position
- * 3. 监听鼠标按下事件，抛出onDragStart
- * 4. 监听鼠标滑动事件，抛出onDrag
- * 5. 监听鼠标释放事件，抛出onDragEnd
- */
-class Draggable extends Component<Props, State> {
+class Draggable extends React.Component<Props, State> {
   dragStartMouse!: MousePosition;
 
   ownDocument!: Document;
 
-  getChildPosition(): Position {
-    return this.props.itemPosition;
-  }
-
-  getDividerPosition(): Position {
-    let { width = 0, height = 0, x = 0, y = 0 } = this.getChildPosition() || {};
-    const { direction } = this.props;
+  getDividerPosition(): Position | undefined {
+    const { position } = this.props;
+    if (!position) {
+      return undefined;
+    }
+    const fatherLayout = this.getCurrentFatherLayout();
+    if (!fatherLayout) {
+      return undefined;
+    }
+    const { direction } = fatherLayout;
+    let { width, height, x, y } = position;
     x += direction === 'horizontal' ? width - DIVIDER_WIDTH / 2 : 0;
     y += direction === 'vertical' ? height - DIVIDER_WIDTH / 2 : 0;
     width = direction === 'horizontal' ? DIVIDER_WIDTH : width;
     height = direction === 'vertical' ? DIVIDER_WIDTH : height;
     return {
-      width,
-      height,
+      ...position,
       x,
       y,
+      width,
+      height,
     };
   }
 
-  getDividerStyle(): CSSProperties {
-    const position = this.getDividerPosition();
-    const { direction } = this.props;
-    return {
-      ...renderPosition(position),
-      position: 'absolute',
-      cursor: direction === 'horizontal' ? 'ew-resize' : 'ns-resize',
-    };
+  getBaseFatherLayout(): RequiredLayout | undefined {
+    const { position, baseLayout } = this.props;
+    if (!position) {
+      return undefined;
+    }
+    const { key } = position;
+    return getFatherLayoutByItemKey(key, baseLayout)!;
+  }
+
+  getCurrentFatherLayout(): RequiredLayout | undefined {
+    const { position, layout } = this.props;
+    if (!position) {
+      return undefined;
+    }
+    const { key } = position;
+    return getFatherLayoutByItemKey(key, layout)!;
   }
 
   handleDragStart: MouseEventHandler<HTMLDivElement> = (e) => {
@@ -67,28 +81,60 @@ class Draggable extends Component<Props, State> {
       y: e.clientY,
     };
     this.ownDocument = e.currentTarget.ownerDocument;
-    this.props.onDragStart();
+    const { onDragStart, onBaseLayoutChange, layout } = this.props;
+    onDragStart?.();
+    onBaseLayoutChange(layout);
     this.patchEvent(e);
   };
 
   handleDrag = (e: MouseEvent) => {
-    const { direction } = this.props;
+    const { position, baseLayout, onLayoutChange } = this.props;
+    const currentFatherLayout = this.getCurrentFatherLayout();
+    const baseFatherLayout = this.getBaseFatherLayout();
+    if (!position || !currentFatherLayout || !baseFatherLayout) {
+      return;
+    }
     const moved =
-      direction === 'horizontal'
+      currentFatherLayout.direction === 'horizontal'
         ? e.clientX - this.dragStartMouse.x
         : e.clientY - this.dragStartMouse.y;
-    this.props.onDrag(moved);
+    const [newFatherLayout] = dragItem(baseFatherLayout, position.key, moved);
+    const newLayout = cloneLayoutWith(baseLayout, (child) => {
+      if (child === baseFatherLayout) {
+        return newFatherLayout;
+      }
+      return undefined;
+    });
+    onLayoutChange(newLayout);
   };
 
   handleDragEnd = (e: MouseEvent) => {
-    const { direction } = this.props;
-    const moved =
-      direction === 'horizontal'
-        ? e.clientX - this.dragStartMouse.x
-        : e.clientY - this.dragStartMouse.y;
-    this.props.onDragEnd(moved);
+    const { onBaseLayoutChange, layout } = this.props;
+    onBaseLayoutChange(layout);
     this.patchEvent(e as any, true);
   };
+
+  createDividerStyle(): CSSProperties {
+    const position = this.getDividerPosition();
+    if (!position) {
+      return {
+        display: 'none',
+      };
+    }
+    const { key } = position;
+    const fatherLayout = this.getCurrentFatherLayout()!;
+    const itemIndex = findChildIndex(fatherLayout, key);
+    if (itemIndex === fatherLayout.children.length - 1) {
+      return {
+        display: 'none',
+      };
+    }
+    const { direction } = fatherLayout;
+    return {
+      ...renderPosition(position),
+      cursor: direction === 'horizontal' ? 'ew-resize' : 'ns-resize',
+    };
+  }
 
   patchEvent(e: React.MouseEvent<HTMLDivElement>, remove = false) {
     if (remove) {
@@ -102,12 +148,11 @@ class Draggable extends Component<Props, State> {
   }
 
   render() {
-    const { children, dividerHidden } = this.props;
-
+    const { children } = this.props;
     return (
       <>
         {children}
-        <div hidden={dividerHidden} style={this.getDividerStyle()} onMouseDown={this.handleDragStart} />
+        <div style={this.createDividerStyle()} onMouseDown={this.handleDragStart} />
       </>
     );
   }

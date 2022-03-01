@@ -1,26 +1,22 @@
-import { Component, Children, cloneElement, RefCallback } from 'react';
-import { Size } from '../types';
+import React, { Children, cloneElement, RefCallback } from 'react';
+import { RequiredLayout } from '../types';
+import { resizeLayout } from '../utils';
 
 type Props = {
-  onResize?: (newSize: Size, oldSize: Size) => void;
+  baseLayout: RequiredLayout;
+  onLayoutChange: (layout: RequiredLayout) => void;
 };
 
-class Resizable extends Component<Props> {
+class Resizable extends React.Component<Props> {
   element!: HTMLDivElement;
-
-  lastSize!: Size;
 
   resizeObserver!: ResizeObserver;
 
   componentDidMount() {
-    if(!this.element) {
+    if (!this.element) {
       return;
     }
-    this.resizeObserver = new ResizeObserver((entries: ResizeObserverEntry[]) => {
-      const { onResize } = this.props;
-      const { contentRect: {width, height} } = entries[0];
-      onResize?.({width, height}, this.lastSize);
-    });
+    this.resizeObserver = new ResizeObserver(this.handleResize);
     this.resizeObserver.observe(this.element);
   }
 
@@ -31,22 +27,37 @@ class Resizable extends Component<Props> {
   handleRef: RefCallback<HTMLDivElement> = (element) => {
     this.element = element!;
     const { ref } = this.getChild();
-    if(typeof ref === 'function') {
+    if (typeof ref === 'function') {
       ref(element);
-    } else if(typeof ref === 'object') {
+    } else if (typeof ref === 'object') {
       ref.current = element;
     }
-  }
+  };
+
+  handleResize: ResizeObserverCallback = (entries) => {
+    const { baseLayout, onLayoutChange } = this.props;
+    const {
+      contentRect: { width, height },
+    } = entries[0];
+    const { width: lastWidth, height: lastHeight } = baseLayout;
+    if (width === lastWidth && height === lastHeight) {
+      return;
+    }
+    const [newLayout] = resizeLayout(baseLayout, {
+      width: width - lastWidth,
+      height: height - lastHeight,
+    });
+    onLayoutChange(newLayout);
+  };
 
   getChild() {
     return Children.only(this.props.children) as any;
   }
 
   render() {
-    const newChild = cloneElement(this.getChild(), {
+    return cloneElement(this.getChild(), {
       ref: this.handleRef,
     });
-    return newChild;
   }
 }
 
