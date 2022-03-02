@@ -88,6 +88,12 @@ class DragLayout extends React.Component<Props, State> {
     });
   };
 
+  handleContainerShapeChange = (containerShape: Size) => {
+    this.setState({
+      containerShape,
+    });
+  };
+
   handleLayoutChange = (layout: RequiredLayout) => {
     this.setState({
       layout,
@@ -133,7 +139,7 @@ class DragLayout extends React.Component<Props, State> {
   render() {
     const { children } = this.props;
     const { itemPositionMap, layoutPositionMap, baseLayout } = this.state;
-    const { handleLayoutChange } = this;
+    const { handleLayoutChange, handleContainerShapeChange } = this;
     const positionList = [
       // @ts-ignore
       ...itemPositionMap.values(),
@@ -142,7 +148,11 @@ class DragLayout extends React.Component<Props, State> {
     ];
 
     return (
-      <Resizable baseLayout={baseLayout} onLayoutChange={handleLayoutChange}>
+      <Resizable
+        baseLayout={baseLayout}
+        onLayoutChange={handleLayoutChange}
+        onContainerShapeChange={handleContainerShapeChange}
+      >
         <div ref={this.containerRef} className={this.createClassName()} style={this.createStyle()}>
           {React.Children.map(children, (child) => this.processItem(child as any))}
           {positionList.map((position) => this.processDivider(position))}

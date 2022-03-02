@@ -1,9 +1,10 @@
 import React, { Children, cloneElement, RefCallback } from 'react';
-import { RequiredLayout } from '../types';
+import { RequiredLayout, Size } from '../types';
 import { resizeLayout } from '../utils';
 
 type Props = {
   baseLayout: RequiredLayout;
+  onContainerShapeChange: (containerShape: Size) => void;
   onLayoutChange: (layout: RequiredLayout) => void;
 };
 
@@ -35,7 +36,7 @@ class Resizable extends React.Component<Props> {
   };
 
   handleResize: ResizeObserverCallback = (entries) => {
-    const { baseLayout, onLayoutChange } = this.props;
+    const { baseLayout, onLayoutChange, onContainerShapeChange } = this.props;
     const {
       contentRect: { width, height },
     } = entries[0];
@@ -48,6 +49,10 @@ class Resizable extends React.Component<Props> {
       height: height - lastHeight,
     });
     onLayoutChange(newLayout);
+    onContainerShapeChange({
+      width: newLayout.width,
+      height: newLayout.height,
+    });
   };
 
   getChild() {
