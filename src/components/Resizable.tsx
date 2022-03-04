@@ -5,7 +5,8 @@ import {
   findChildIndex,
   getFatherLayoutByItemKey,
   resizeElement,
-  cloneLayoutWith,
+  cloneNodeWith,
+  typeToLayout,
 } from '../utils';
 
 type MousePosition = {
@@ -99,13 +100,15 @@ class Resizable extends React.Component<Props, State> {
         ? e.clientX - this.dragStartMouse.x
         : e.clientY - this.dragStartMouse.y;
     const [newFatherLayout] = resizeElement(baseFatherLayout, position.key, moved);
-    const newLayout = cloneLayoutWith(baseLayout, (child) => {
+    const newLayout = cloneNodeWith(baseLayout, (child) => {
       if (child === baseFatherLayout) {
         return newFatherLayout;
       }
       return undefined;
     });
-    onLayoutChange(newLayout);
+    if (typeToLayout(newLayout)) {
+      onLayoutChange(newLayout);
+    }
   };
 
   handleResizeEnd = (e: MouseEvent) => {

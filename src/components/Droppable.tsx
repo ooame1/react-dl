@@ -1,8 +1,14 @@
 import React, { CSSProperties, DragEventHandler } from 'react';
 import { DRAG_DATA_KEY } from '../constants';
+import { dragItem, noop } from '../utils';
+import { RequiredLayout, Position } from '../types';
 
 type Props = {
   style?: CSSProperties;
+  position?: Position;
+  layout: RequiredLayout;
+  onLayoutChange: (layout: RequiredLayout) => void;
+  onBaseLayoutChange: (layout: RequiredLayout) => void;
 };
 
 type State = {};
@@ -22,7 +28,22 @@ class Droppable extends React.Component<Props, State> {
 
   // eslint-disable-next-line class-methods-use-this
   handleDrop: DragEventHandler = (e) => {
-    console.log(e.dataTransfer.getData(DRAG_DATA_KEY));
+    let draggedItem: any;
+    try {
+      draggedItem = JSON.parse(e.dataTransfer.getData(DRAG_DATA_KEY));
+    } catch {
+      noop();
+    }
+    if (!draggedItem?.key) {
+      return;
+    }
+    const { position, layout, onLayoutChange, onBaseLayoutChange } = this.props;
+    if (!position) {
+      return;
+    }
+    const newLayout = dragItem(layout, draggedItem, position.key, 'right');
+    onLayoutChange(newLayout);
+    onBaseLayoutChange(newLayout);
   }
 
   render() {

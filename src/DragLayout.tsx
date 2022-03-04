@@ -113,10 +113,19 @@ class DragLayout extends React.Component<Props, State> {
   }
 
   processItem(child: ReactElement<any>) {
+    const { layout } = this.state;
+    const { handleLayoutChange, handleBaseLayoutChange } = this;
     const position = this.state.itemPositionMap.get(child.key as string);
     return (
       <DragItem key={child.key} position={position}>
-        <Droppable>{child}</Droppable>
+        <Droppable
+          position={position}
+          layout={layout}
+          onLayoutChange={handleLayoutChange}
+          onBaseLayoutChange={handleBaseLayoutChange}
+        >
+          {child}
+        </Droppable>
       </DragItem>
     );
   }

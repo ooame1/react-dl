@@ -107,29 +107,23 @@ export function cloneItem(item: RequiredItem): RequiredItem {
  *
  * 不修改原对象
  */
-export function cloneLayoutWith(
-  layout: RequiredLayout,
-  customizer: (child: RequiredLayout) => RequiredLayout | undefined = () => undefined
-): RequiredLayout {
-  const _layout = customizer(layout);
-  if (_layout) {
-    return _layout;
+export function cloneNodeWith(
+  node: RequiredLayout | RequiredItem,
+  customizer: (child: RequiredLayout | RequiredItem) => RequiredLayout | RequiredItem | undefined = () => undefined
+): RequiredLayout | RequiredItem {
+  const _node = customizer(node);
+  if (_node) {
+    return _node;
+  }
+  if (!typeToLayout(node)) {
+    return cloneItem(node);
   }
   const newLayout: RequiredLayout = {
-    ...layout,
+    ...node,
     children: [],
   };
-  layout.children.forEach((child) => {
-    if (typeToLayout(child)) {
-      const childLayout = customizer(child);
-      if (!childLayout) {
-        newLayout.children.push(cloneLayoutWith(child, customizer));
-      } else {
-        newLayout.children.push(childLayout);
-      }
-    } else {
-      newLayout.children.push(cloneItem(child));
-    }
+  node.children.forEach((child) => {
+    newLayout.children.push(cloneNodeWith(child, customizer));
   });
   return newLayout;
 }
@@ -288,7 +282,7 @@ export function scaleItem(item: RequiredItem, resize: Size): [RequiredItem, Size
  *
  * 不修改原对象
  */
-export function scaleLayoutOrItem(child: RequiredLayout | RequiredItem, resize: Partial<Size>) {
+export function scaleNode(child: RequiredLayout | RequiredItem, resize: Partial<Size>) {
   const requiredResize: Size = {
     width: 0,
     height: 0,
@@ -321,7 +315,7 @@ export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayo
   resized[notDirectionAttr] = Infinity;
   // 非布局方向取可变最小的一个
   layout.children.forEach((child) => {
-    const [, _resized] = scaleLayoutOrItem(child, {
+    const [, _resized] = scaleNode(child, {
       [notDirectionAttr]: resize[notDirectionAttr],
     });
     if (Math.abs(_resized[notDirectionAttr]) < Math.abs(resized[notDirectionAttr])) {
@@ -329,7 +323,7 @@ export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayo
     }
   });
   newLayout.children = layout.children.map((child) => {
-    return scaleLayoutOrItem(child, {
+    return scaleNode(child, {
       [notDirectionAttr]: resized[notDirectionAttr],
     })[0];
   });
@@ -347,7 +341,7 @@ export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayo
         height: 0,
         [directionAttr]: directionAllResize / (layout.children.length - overSet.size),
       };
-      const [, _resized] = scaleLayoutOrItem(child, _resize);
+      const [, _resized] = scaleNode(child, _resize);
       if (_resized[directionAttr] !== _resize[directionAttr]) {
         overSet.add(child);
         filledResize += _resized[directionAttr];
@@ -366,7 +360,7 @@ export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayo
   }
   resized[directionAttr] = directionResizeArr.reduce((pre, cur) => pre + cur, 0);
   newLayout.children = newLayout.children.map((child, index) => {
-    return scaleLayoutOrItem(child, {
+    return scaleNode(child, {
       [directionAttr]: directionResizeArr[index],
     })[0];
   });
@@ -386,7 +380,7 @@ export function resizeElement(
   dragged: number
 ): [RequiredLayout, number] {
   const itemIndex = findChildIndex(fatherLayout, itemKey);
-  const newLayout: RequiredLayout = cloneLayoutWith(fatherLayout);
+  const newLayout: RequiredLayout = cloneNodeWith(fatherLayout) as RequiredLayout;
   const resizeKey = newLayout.direction === 'horizontal' ? 'width' : 'height';
   let leftIndex = itemIndex;
   let rightIndex = itemIndex + 1;
@@ -397,7 +391,7 @@ export function resizeElement(
     (rightWillResize !== 0 && rightIndex < newLayout.children.length)
   ) {
     if (rightWillResize !== 0) {
-      const [newChild, _resized] = scaleLayoutOrItem(newLayout.children[rightIndex], {
+      const [newChild, _resized] = scaleNode(newLayout.children[rightIndex], {
         [resizeKey]: rightWillResize,
       });
       newLayout.children[rightIndex] = newChild;
@@ -406,7 +400,7 @@ export function resizeElement(
         rightIndex++;
       }
     } else {
-      const [newChild, _resized] = scaleLayoutOrItem(newLayout.children[leftIndex], {
+      const [newChild, _resized] = scaleNode(newLayout.children[leftIndex], {
         [resizeKey]: leftWillResize,
       });
       newLayout.children[leftIndex] = newChild;
@@ -420,11 +414,103 @@ export function resizeElement(
   if (rightWillResize !== 0) {
     const lastLeftChange = leftWillResize === 0 ? leftIndex : leftIndex + 1;
     leftWillResize -= rightWillResize;
-    [newLayout.children[lastLeftChange]] = scaleLayoutOrItem(newLayout.children[lastLeftChange], {
+    [newLayout.children[lastLeftChange]] = scaleNode(newLayout.children[lastLeftChange], {
       [resizeKey]: rightWillResize,
     });
   }
   return [newLayout, dragged - leftWillResize];
+}
+
+/**
+ * 拖拽调整布局结构
+ *
+ * 不修改原对象
+ */
+export function dragItem(layout: RequiredLayout, draggedItem: RequiredItem, targetItemKey: Key, dragDirection: string) {
+  const draggedFatherLayout = getFatherLayoutByItemKey(draggedItem.key, layout);
+  const targetFatherLayout = getFatherLayoutByItemKey(targetItemKey, layout)!;
+  let newDraggedLayout: RequiredLayout | RequiredItem = null!;
+  let newTargetLayout: RequiredLayout | RequiredItem = null!;
+  if (draggedFatherLayout) {
+    if (draggedFatherLayout.children.length === 2) {
+      const child = draggedFatherLayout.children.find(c => c.key !== draggedItem.key)!;
+      [newDraggedLayout] = scaleNode(child, {
+        width: draggedFatherLayout.width - child.width,
+        height: draggedFatherLayout.height - child.height,
+      });
+    } else {
+      const child = draggedFatherLayout.children.find(c => c.key === draggedItem.key)!;
+      const newLayout: RequiredLayout = {
+        ...draggedFatherLayout,
+        children: draggedFatherLayout.children.filter(r => r.key !== draggedItem.key),
+        width: draggedFatherLayout.width - child.width,
+        height: draggedFatherLayout.height - child.height,
+      };
+      [newDraggedLayout] = scaleNode(newLayout, {
+        width: draggedFatherLayout.width - child.width,
+        height: draggedFatherLayout.height - child.height,
+      });
+    }
+  }
+  const map = {
+    horizontal: ['left', 'right'],
+    vertical: ['top', 'bottom'],
+  };
+  const after = dragDirection === 'bottom' || dragDirection === 'right';
+  const { children } = targetFatherLayout;
+  const index = findChildIndex(targetFatherLayout, targetItemKey);
+  const targetItem = children[index] as RequiredItem;
+  const newSize: Size = {
+    width: targetFatherLayout.direction === 'horizontal' ? targetItem.width / 2 : targetItem.width,
+    height: targetFatherLayout.direction === 'vertical' ? targetItem.height / 2 : targetItem.height,
+  };
+  const newTargetChild: RequiredItem = {
+    ...targetItem,
+    ...newSize,
+  };
+  const newDraggedChild: RequiredItem = {
+    ...draggedItem,
+    ...newSize,
+  };
+  if (Object.keys(map).some(i => targetFatherLayout.direction === i && map[i].includes(dragDirection))) {
+    let newLayout: RequiredLayout = null!;
+    if (after) {
+      newLayout = {
+        ...targetFatherLayout,
+        children: [...children.slice(0, index), newTargetChild, newDraggedChild, ...children.slice(index + 1)],
+      };
+    } else {
+      newLayout = {
+        ...targetFatherLayout,
+        children: [...children.slice(0, index), newDraggedChild, newTargetChild, ...children.slice(index + 1)],
+      };
+    }
+    newTargetLayout = cloneNodeWith(newLayout);
+  } else {
+    const newLayout: RequiredLayout = {
+      key: `${targetFatherLayout.key}_${index}`,
+      children: after ? [newTargetChild, newDraggedChild] : [newDraggedLayout, newTargetLayout],
+      direction: targetFatherLayout.direction === 'horizontal' ? 'vertical' : 'horizontal',
+      type: 'layout',
+      width: targetItem.width,
+      height: targetItem.height,
+    };
+    newTargetLayout = cloneNodeWith(targetFatherLayout, c => {
+      if (c.key === targetItem.key) {
+        return newLayout;
+      }
+      return undefined;
+    });
+  }
+  return cloneNodeWith(layout, node => {
+    if (node.key === draggedFatherLayout?.key) {
+      return newDraggedLayout;
+    }
+    if (node.key === targetFatherLayout.key) {
+      return newTargetLayout;
+    }
+    return undefined;
+  }) as RequiredLayout;
 }
 
 export const noop = () => {};
