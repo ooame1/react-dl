@@ -1,4 +1,5 @@
 import { CSSProperties } from 'react';
+import { ROOT_LAYOUT_KEY, MIN_WIDTH, MIN_HEIGHT, DEFAULT_DIRECTION } from './constants';
 import {
   Layout,
   RequiredLayout,
@@ -20,15 +21,6 @@ type RequiredLayoutToKeyMap = WeakMap<RequiredLayout, FatherLayoutMap>;
 
 // 缓存根布局表
 const cacheMap: RequiredLayoutToKeyMap = new WeakMap<RequiredLayout, FatherLayoutMap>();
-
-// 未设置布局方向时使用的默认布局方向
-const default_direction: Direction = 'horizontal';
-
-// 最小宽/高
-const ITEM_MIN_SIZE = 50;
-
-// 根布局key
-export const ROOT_LAYOUT_KEY = '__REACT_DRAG_LAYOUT_ROOT';
 
 /**
  * 类型断言: 判断是布局容器还是布局元素
@@ -146,7 +138,7 @@ export function cloneLayoutWith(
  * 根据布局容器的宽和高计算每个子节点的宽和高
  */
 export function getLayoutChildrenShapes(layout: Layout, shape: Size): Array<Size> {
-  const direction: Direction = layout.direction || default_direction;
+  const direction: Direction = layout.direction || DEFAULT_DIRECTION;
   const children: Layout['children'] = layout.children || [];
   const shapes: Array<Size> = [];
   const reshapeAttr = direction === 'horizontal' ? 'width' : 'height';
@@ -193,7 +185,7 @@ export function formatLayout(
   const requiredLayout: RequiredLayout = {
     key: rootKey,
     type: 'layout',
-    direction: layout.direction || default_direction,
+    direction: layout.direction || DEFAULT_DIRECTION,
     children: [],
     width: factShape.width,
     height: factShape.height,
@@ -271,15 +263,17 @@ export function convertLayoutToPositionMap(
  *
  * 不改变原对象
  */
-export function resizeItem(item: RequiredItem, resize: Size): [RequiredItem, Size] {
+export function scaleItem(item: RequiredItem, resize: Size): [RequiredItem, Size] {
   const newItem = cloneItem(item);
   const resized: Size = {
     width: 0,
     height: 0,
   };
-  ['width', 'height'].forEach((key) => {
-    if (item[key] + resize[key] < ITEM_MIN_SIZE) {
-      newItem[key] = ITEM_MIN_SIZE;
+  const minSize = [MIN_WIDTH, MIN_HEIGHT];
+  ['width', 'height'].forEach((key, index) => {
+    const min = minSize[index];
+    if (item[key] + resize[key] < min) {
+      newItem[key] = min;
       resized[key] = newItem[key] - item[key];
     } else {
       newItem[key] = item[key] + resize[key];
@@ -294,16 +288,16 @@ export function resizeItem(item: RequiredItem, resize: Size): [RequiredItem, Siz
  *
  * 不修改原对象
  */
-export function resizeLayoutOrItem(child: RequiredLayout | RequiredItem, resize: Partial<Size>) {
+export function scaleLayoutOrItem(child: RequiredLayout | RequiredItem, resize: Partial<Size>) {
   const requiredResize: Size = {
     width: 0,
     height: 0,
     ...resize,
   };
   if (typeToLayout(child)) {
-    return resizeLayout(child, requiredResize);
+    return scaleLayout(child, requiredResize);
   }
-  return resizeItem(child, requiredResize);
+  return scaleItem(child, requiredResize);
 }
 
 /**
@@ -313,7 +307,7 @@ export function resizeLayoutOrItem(child: RequiredLayout | RequiredItem, resize:
  *
  * 不改变原对象
  */
-export function resizeLayout(layout: RequiredLayout, resize: Size): [RequiredLayout, Size] {
+export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayout, Size] {
   const newLayout: RequiredLayout = {
     ...layout,
     children: [],
@@ -327,7 +321,7 @@ export function resizeLayout(layout: RequiredLayout, resize: Size): [RequiredLay
   resized[notDirectionAttr] = Infinity;
   // 非布局方向取可变最小的一个
   layout.children.forEach((child) => {
-    const [, _resized] = resizeLayoutOrItem(child, {
+    const [, _resized] = scaleLayoutOrItem(child, {
       [notDirectionAttr]: resize[notDirectionAttr],
     });
     if (Math.abs(_resized[notDirectionAttr]) < Math.abs(resized[notDirectionAttr])) {
@@ -335,7 +329,7 @@ export function resizeLayout(layout: RequiredLayout, resize: Size): [RequiredLay
     }
   });
   newLayout.children = layout.children.map((child) => {
-    return resizeLayoutOrItem(child, {
+    return scaleLayoutOrItem(child, {
       [notDirectionAttr]: resized[notDirectionAttr],
     })[0];
   });
@@ -353,7 +347,7 @@ export function resizeLayout(layout: RequiredLayout, resize: Size): [RequiredLay
         height: 0,
         [directionAttr]: directionAllResize / (layout.children.length - overSet.size),
       };
-      const [, _resized] = resizeLayoutOrItem(child, _resize);
+      const [, _resized] = scaleLayoutOrItem(child, _resize);
       if (_resized[directionAttr] !== _resize[directionAttr]) {
         overSet.add(child);
         filledResize += _resized[directionAttr];
@@ -372,7 +366,7 @@ export function resizeLayout(layout: RequiredLayout, resize: Size): [RequiredLay
   }
   resized[directionAttr] = directionResizeArr.reduce((pre, cur) => pre + cur, 0);
   newLayout.children = newLayout.children.map((child, index) => {
-    return resizeLayoutOrItem(child, {
+    return scaleLayoutOrItem(child, {
       [directionAttr]: directionResizeArr[index],
     })[0];
   });
@@ -386,7 +380,7 @@ export function resizeLayout(layout: RequiredLayout, resize: Size): [RequiredLay
  *
  * 不修改原对象
  */
-export function dragItem(
+export function resizeElement(
   fatherLayout: RequiredLayout,
   itemKey: Key,
   dragged: number
@@ -403,7 +397,7 @@ export function dragItem(
     (rightWillResize !== 0 && rightIndex < newLayout.children.length)
   ) {
     if (rightWillResize !== 0) {
-      const [newChild, _resized] = resizeLayoutOrItem(newLayout.children[rightIndex], {
+      const [newChild, _resized] = scaleLayoutOrItem(newLayout.children[rightIndex], {
         [resizeKey]: rightWillResize,
       });
       newLayout.children[rightIndex] = newChild;
@@ -412,7 +406,7 @@ export function dragItem(
         rightIndex++;
       }
     } else {
-      const [newChild, _resized] = resizeLayoutOrItem(newLayout.children[leftIndex], {
+      const [newChild, _resized] = scaleLayoutOrItem(newLayout.children[leftIndex], {
         [resizeKey]: leftWillResize,
       });
       newLayout.children[leftIndex] = newChild;
@@ -426,7 +420,7 @@ export function dragItem(
   if (rightWillResize !== 0) {
     const lastLeftChange = leftWillResize === 0 ? leftIndex : leftIndex + 1;
     leftWillResize -= rightWillResize;
-    [newLayout.children[lastLeftChange]] = resizeLayoutOrItem(newLayout.children[lastLeftChange], {
+    [newLayout.children[lastLeftChange]] = scaleLayoutOrItem(newLayout.children[lastLeftChange], {
       [resizeKey]: rightWillResize,
     });
   }

@@ -1,20 +1,20 @@
 import React, { createRef, CSSProperties, PropsWithChildren, ReactElement } from 'react';
-import Draggable from './components/Draggable';
+import Droppable from './components/Droppable';
 import Resizable from './components/Resizable';
+import Scalable from './components/Scalable';
 import DragItem from './DragItem';
+import { ROOT_LAYOUT_KEY } from './constants';
 import { Layout, Size, PositionMap, Position, RequiredLayout } from './types';
-import { formatLayout, convertLayoutToPositionMap, ROOT_LAYOUT_KEY } from './utils';
+import { formatLayout, convertLayoutToPositionMap } from './utils';
 
 type Props = {
   initLayout?: Layout;
   layout?: Layout;
   className?: string;
   style?: CSSProperties;
-  onDragStart?: (layout: RequiredLayout) => void; // 开始拖拽分割线
-  onDrag?: (layout: RequiredLayout) => void; // 拖拽分割线
-  onDragEnd?: (layout: RequiredLayout) => void; // 结束拖拽分割线
-  onMoveEnd?: (layout: RequiredLayout) => void; // 拖拽标题调整布局
-  onResize?: (layout: RequiredLayout) => void;
+  onDrag?: (layout: RequiredLayout) => void; // 拖拽调整布局
+  onResize?: (layout: RequiredLayout) => void; // 拖拽分割线
+  onScale?: (layout: RequiredLayout) => void; // 自动填满父窗口
   onLayoutChange?: (layout: RequiredLayout) => void;
 };
 
@@ -116,7 +116,7 @@ class DragLayout extends React.Component<Props, State> {
     const position = this.state.itemPositionMap.get(child.key as string);
     return (
       <DragItem key={child.key} position={position}>
-        {child}
+        <Droppable>{child}</Droppable>
       </DragItem>
     );
   }
@@ -125,7 +125,7 @@ class DragLayout extends React.Component<Props, State> {
     const { layout, baseLayout } = this.state;
     const { handleLayoutChange, handleBaseLayoutChange } = this;
     return (
-      <Draggable
+      <Resizable
         key={position.key}
         position={position}
         layout={layout}
@@ -148,7 +148,7 @@ class DragLayout extends React.Component<Props, State> {
     ];
 
     return (
-      <Resizable
+      <Scalable
         baseLayout={baseLayout}
         onLayoutChange={handleLayoutChange}
         onContainerShapeChange={handleContainerShapeChange}
@@ -157,7 +157,7 @@ class DragLayout extends React.Component<Props, State> {
           {React.Children.map(children, (child) => this.processItem(child as any))}
           {positionList.map((position) => this.processDivider(position))}
         </div>
-      </Resizable>
+      </Scalable>
     );
   }
 }

@@ -1,68 +1,160 @@
-import React, { Children, cloneElement, RefCallback } from 'react';
-import { RequiredLayout, Size } from '../types';
-import { resizeLayout } from '../utils';
+import React, { CSSProperties, MouseEventHandler } from 'react';
+import { Position, RequiredLayout } from '../types';
+import {
+  renderPosition,
+  findChildIndex,
+  getFatherLayoutByItemKey,
+  resizeElement,
+  cloneLayoutWith,
+} from '../utils';
+
+type MousePosition = {
+  x: number;
+  y: number;
+};
 
 type Props = {
+  position?: Position;
   baseLayout: RequiredLayout;
-  onContainerShapeChange: (containerShape: Size) => void;
+  layout: RequiredLayout;
+  onDragStart?: () => void;
+  onDrag?: () => void;
+  onDragEnd?: () => void;
+  onBaseLayoutChange: (baseLayout: RequiredLayout) => void;
   onLayoutChange: (layout: RequiredLayout) => void;
 };
 
-class Resizable extends React.Component<Props> {
-  element!: HTMLDivElement;
+type State = {};
 
-  resizeObserver!: ResizeObserver;
+const DIVIDER_WIDTH = 5;
 
-  componentDidMount() {
-    if (!this.element) {
-      return;
+class Resizable extends React.Component<Props, State> {
+  dragStartMouse!: MousePosition;
+
+  ownDocument!: Document;
+
+  getDividerPosition(): Position | undefined {
+    const { position } = this.props;
+    if (!position) {
+      return undefined;
     }
-    this.resizeObserver = new ResizeObserver(this.handleResize);
-    this.resizeObserver.observe(this.element);
+    const fatherLayout = this.getCurrentFatherLayout();
+    if (!fatherLayout) {
+      return undefined;
+    }
+    const { direction } = fatherLayout;
+    let { width, height, x, y } = position;
+    x += direction === 'horizontal' ? width - DIVIDER_WIDTH / 2 : 0;
+    y += direction === 'vertical' ? height - DIVIDER_WIDTH / 2 : 0;
+    width = direction === 'horizontal' ? DIVIDER_WIDTH : width;
+    height = direction === 'vertical' ? DIVIDER_WIDTH : height;
+    return {
+      ...position,
+      x,
+      y,
+      width,
+      height,
+    };
   }
 
-  componentWillUnmount() {
-    this.resizeObserver?.disconnect();
+  getBaseFatherLayout(): RequiredLayout | undefined {
+    const { position, baseLayout } = this.props;
+    if (!position) {
+      return undefined;
+    }
+    const { key } = position;
+    return getFatherLayoutByItemKey(key, baseLayout)!;
   }
 
-  handleRef: RefCallback<HTMLDivElement> = (element) => {
-    this.element = element!;
-    const { ref } = this.getChild();
-    if (typeof ref === 'function') {
-      ref(element);
-    } else if (typeof ref === 'object') {
-      ref.current = element;
+  getCurrentFatherLayout(): RequiredLayout | undefined {
+    const { position, layout } = this.props;
+    if (!position) {
+      return undefined;
     }
+    const { key } = position;
+    return getFatherLayoutByItemKey(key, layout)!;
+  }
+
+  handleResizeStart: MouseEventHandler<HTMLDivElement> = (e) => {
+    this.dragStartMouse = {
+      x: e.clientX,
+      y: e.clientY,
+    };
+    this.ownDocument = e.currentTarget.ownerDocument;
+    const { onDragStart, onBaseLayoutChange, layout } = this.props;
+    onDragStart?.();
+    onBaseLayoutChange(layout);
+    this.patchEvent(e);
   };
 
-  handleResize: ResizeObserverCallback = (entries) => {
-    const { baseLayout, onLayoutChange, onContainerShapeChange } = this.props;
-    const {
-      contentRect: { width, height },
-    } = entries[0];
-    const { width: lastWidth, height: lastHeight } = baseLayout;
-    if (width === lastWidth && height === lastHeight) {
+  handleResize = (e: MouseEvent) => {
+    const { position, baseLayout, onLayoutChange } = this.props;
+    const currentFatherLayout = this.getCurrentFatherLayout();
+    const baseFatherLayout = this.getBaseFatherLayout();
+    if (!position || !currentFatherLayout || !baseFatherLayout) {
       return;
     }
-    const [newLayout] = resizeLayout(baseLayout, {
-      width: width - lastWidth,
-      height: height - lastHeight,
+    const moved =
+      currentFatherLayout.direction === 'horizontal'
+        ? e.clientX - this.dragStartMouse.x
+        : e.clientY - this.dragStartMouse.y;
+    const [newFatherLayout] = resizeElement(baseFatherLayout, position.key, moved);
+    const newLayout = cloneLayoutWith(baseLayout, (child) => {
+      if (child === baseFatherLayout) {
+        return newFatherLayout;
+      }
+      return undefined;
     });
     onLayoutChange(newLayout);
-    onContainerShapeChange({
-      width: newLayout.width,
-      height: newLayout.height,
-    });
   };
 
-  getChild() {
-    return Children.only(this.props.children) as any;
+  handleResizeEnd = (e: MouseEvent) => {
+    const { onBaseLayoutChange, layout } = this.props;
+    onBaseLayoutChange(layout);
+    this.patchEvent(e as any, true);
+  };
+
+  createDividerStyle(): CSSProperties {
+    const position = this.getDividerPosition();
+    if (!position) {
+      return {
+        display: 'none',
+      };
+    }
+    const { key } = position;
+    const fatherLayout = this.getCurrentFatherLayout()!;
+    const itemIndex = findChildIndex(fatherLayout, key);
+    if (itemIndex === fatherLayout.children.length - 1) {
+      return {
+        display: 'none',
+      };
+    }
+    const { direction } = fatherLayout;
+    return {
+      ...renderPosition(position),
+      cursor: direction === 'horizontal' ? 'ew-resize' : 'ns-resize',
+    };
+  }
+
+  patchEvent(e: React.MouseEvent<HTMLDivElement>, remove = false) {
+    if (remove) {
+      this.ownDocument.removeEventListener('mousemove', this.handleResize);
+      this.ownDocument.removeEventListener('mouseup', this.handleResizeEnd);
+    } else {
+      this.ownDocument = e.currentTarget.ownerDocument;
+      e.currentTarget.ownerDocument.addEventListener('mousemove', this.handleResize);
+      e.currentTarget.ownerDocument.addEventListener('mouseup', this.handleResizeEnd);
+    }
   }
 
   render() {
-    return cloneElement(this.getChild(), {
-      ref: this.handleRef,
-    });
+    const { children } = this.props;
+    return (
+      <>
+        {children}
+        <div style={this.createDividerStyle()} onMouseDown={this.handleResizeStart} />
+      </>
+    );
   }
 }
 
