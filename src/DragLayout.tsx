@@ -1,24 +1,28 @@
-import React, { createRef, CSSProperties, PropsWithChildren, ReactElement } from 'react';
+import React, { CSSProperties, PropsWithChildren, ReactElement, Ref, RefCallback } from 'react';
 import classNames from 'classnames';
-import Droppable from './components/Droppable';
+import Droppable, { DragDetail } from './components/Droppable';
 import Resizable from './components/Resizable';
-import Scalable from './components/Scalable';
+import Scalable, { ScaleDetail } from './components/Scalable';
 import DragItem from './DragItem';
 import { ROOT_LAYOUT_KEY } from './constants';
-import { Layout, Size, PositionMap, Position, RequiredLayout, Key } from './types';
-import { formatLayout, convertLayoutToPositionMap } from './utils';
+import { Layout, Size, PositionMap, Position, RequiredLayout, Key, ResizeDetail } from './types';
+import { formatLayout, convertLayoutToPositionMap, noop } from './utils';
 
 type Props = {
   initLayout?: Layout;
   layout?: Layout;
   baseLayout?: Layout;
-  className?: string;
-  style?: CSSProperties;
-  onDrag?: (layout: RequiredLayout) => void; // 拖拽调整布局
-  onResize?: (layout: RequiredLayout) => void; // 拖拽分割线
-  onScale?: (layout: RequiredLayout) => void; // 自动填满父窗口
+  innerRef?: Ref<HTMLDivElement>;
   onLayoutChange?: (layout: RequiredLayout) => void;
   onBaseLayoutChange?: (layout: RequiredLayout) => void;
+  className?: string;
+  style?: CSSProperties;
+  autoSize?: boolean;
+  height?: number;
+  width?: number;
+  onDrag?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: DragDetail) => void; // 拖拽调整布局
+  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void; // 拖拽调整布局元素尺寸
+  onScale?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ScaleDetail) => void; // 自动填满父窗口
 };
 
 type State = {
@@ -38,7 +42,17 @@ const emptyLayout: RequiredLayout = {
 };
 
 class DragLayout extends React.Component<Props, State> {
-  containerRef = createRef<HTMLDivElement>();
+  static defaultProps: Partial<Props> = {
+    initLayout: emptyLayout,
+    onLayoutChange: noop,
+    onBaseLayoutChange: noop,
+    autoSize: true,
+    onDrag: noop,
+    onResize: noop,
+    onScale: noop,
+  };
+
+  dom: HTMLDivElement | null = null;
 
   state: State = {
     baseLayout: emptyLayout,
@@ -67,8 +81,8 @@ class DragLayout extends React.Component<Props, State> {
   componentDidMount() {
     const { initLayout, layout } = this.props;
     const containerShape: Size = {
-      width: this.containerRef.current!.clientWidth,
-      height: this.containerRef.current!.clientHeight,
+      width: this.dom!.clientWidth,
+      height: this.dom!.clientHeight,
     };
     const formattedLayout = formatLayout(layout || initLayout || emptyLayout, containerShape);
     this.setState({
@@ -98,11 +112,49 @@ class DragLayout extends React.Component<Props, State> {
     this.props.onLayoutChange?.(layout);
   };
 
+  handleRef: RefCallback<HTMLDivElement> = (element) => {
+    this.dom = element;
+    const { innerRef } = this.props;
+    if (!innerRef) {
+      return;
+    }
+    if (typeof innerRef === 'function') {
+      innerRef(element);
+    } else {
+      Object.assign(innerRef, {
+        current: element,
+      });
+    }
+  };
+
   createClassName() {
     return classNames(this.props.className, 'react-drag-container');
   }
 
+  createStyle(): CSSProperties {
+    const { style, height, width, autoSize } = this.props;
+    const returnStyle: CSSProperties = {
+      ...style,
+    };
+    if (height !== undefined) {
+      Object.assign(returnStyle, {
+        height: `${height}px`,
+      });
+    }
+    if (width !== undefined) {
+      Object.assign(returnStyle, {
+        width: `${width}px`,
+      });
+    }
+    if (autoSize) {
+      returnStyle.width = '100%';
+      returnStyle.height = '100%';
+    }
+    return returnStyle;
+  }
+
   processItem(child: ReactElement<any>) {
+    const { onDrag } = this.props;
     const { layout } = this.state;
     const { handleLayoutChange, handleBaseLayoutChange } = this;
     const position = this.state.positionMap.get(child.key as string);
@@ -113,6 +165,7 @@ class DragLayout extends React.Component<Props, State> {
           layout={layout}
           onLayoutChange={handleLayoutChange}
           onBaseLayoutChange={handleBaseLayoutChange}
+          onDrag={onDrag}
         >
           {child}
         </Droppable>
@@ -121,17 +174,20 @@ class DragLayout extends React.Component<Props, State> {
   }
 
   render() {
-    const { children, style } = this.props;
+    const { children, onScale, onResize } = this.props;
     const { positionMap, baseLayout, layout } = this.state;
-    const { handleLayoutChange, handleBaseLayoutChange, handleContainerShapeChange } = this;
+    const { handleRef, handleLayoutChange, handleBaseLayoutChange, handleContainerShapeChange } =
+      this;
 
     return (
       <Scalable
         baseLayout={baseLayout}
         onLayoutChange={handleLayoutChange}
         onContainerShapeChange={handleContainerShapeChange}
+        layout={layout}
+        onScale={onScale}
       >
-        <div ref={this.containerRef} className={this.createClassName()} style={style}>
+        <div ref={handleRef} className={this.createClassName()} style={this.createStyle()}>
           {React.Children.map(children, (child) => this.processItem(child as any))}
           <Resizable
             positionMap={positionMap}
@@ -139,6 +195,7 @@ class DragLayout extends React.Component<Props, State> {
             baseLayout={baseLayout}
             onLayoutChange={handleLayoutChange}
             onBaseLayoutChange={handleBaseLayoutChange}
+            onResize={onResize}
           />
         </div>
       </Scalable>

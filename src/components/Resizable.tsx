@@ -1,6 +1,11 @@
 import React from 'react';
 import memoize from 'memoize-one';
-import { Position, PositionMap, RequiredLayout } from '../types';
+import {
+  Position,
+  PositionMap,
+  RequiredLayout,
+  ResizeDetail,
+} from '../types';
 import {
   convertLayoutToFatherLayoutMap,
   convertLayoutToDividerPositions,
@@ -14,7 +19,7 @@ type Props = {
   baseLayout: RequiredLayout;
   layout: RequiredLayout;
   onResizeStart?: () => void;
-  onResize?: () => void;
+  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void;
   onResizeEnd?: () => void;
   onBaseLayoutChange: (baseLayout: RequiredLayout) => void;
   onLayoutChange: (layout: RequiredLayout) => void;

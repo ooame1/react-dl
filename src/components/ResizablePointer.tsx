@@ -1,6 +1,13 @@
 import React, { CSSProperties } from 'react';
 import classNames from 'classnames';
-import { FatherLayoutMap, MousePosition, Offset, Position, RequiredLayout } from '../types';
+import {
+  FatherLayoutMap,
+  MousePosition,
+  Offset,
+  Position,
+  RequiredLayout,
+  ResizeDetail,
+} from '../types';
 import ResizableHandler from './ResizableHandler';
 import { cloneNodeWith, convertLayoutToFatherLayoutMap, resizeElement } from '../utils';
 
@@ -15,6 +22,7 @@ type Props = {
   onBaseLayoutChange: (layout: RequiredLayout) => void;
   onResizingPositionTupleChange: (positionTuple: [Position, Position] | null) => void;
   onMouseEnterPositionTupleChange: (positionTuple: [Position, Position] | null) => void;
+  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void;
 };
 
 type State = {
@@ -40,7 +48,8 @@ class ResizablePointer extends React.Component<Props, State> {
   };
 
   handleResize = (mousePosition: MousePosition, oldMousePosition: MousePosition) => {
-    const { positionTuple, baseLayout, baseFatherLayoutMap, onLayoutChange } = this.props;
+    const { positionTuple, baseLayout, baseFatherLayoutMap, onLayoutChange, onResize, layout } =
+      this.props;
     const horizontalMoved = mousePosition.x - oldMousePosition.x;
     const baseFatherLayout = baseFatherLayoutMap.get(positionTuple[0].key)!;
     const [newFatherLayout] = resizeElement(
@@ -61,6 +70,12 @@ class ResizablePointer extends React.Component<Props, State> {
       verticalMoved
     );
     onLayoutChange(newLayout);
+    onResize?.(newLayout, layout, {
+      baseLayout,
+      mousePosition,
+      oldMousePosition,
+      resizeItemKey: [positionTuple[0].key, positionTuple[1].key],
+    });
   };
 
   handleResizeEnd = () => {

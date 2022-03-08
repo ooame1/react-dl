@@ -2,13 +2,21 @@ import React, { Children, cloneElement, RefCallback } from 'react';
 import { RequiredLayout, Size } from '../types';
 import { scaleLayout } from '../utils';
 
+export type ScaleDetail = {
+  baseLayout: RequiredLayout;
+  size: Size;
+  oldSize: Size;
+};
+
 type Props = {
+  layout: RequiredLayout;
   baseLayout: RequiredLayout;
   onContainerShapeChange: (containerShape: Size) => void;
   onLayoutChange: (layout: RequiredLayout) => void;
+  onScale?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ScaleDetail) => void;
 };
 
-class Resizable extends React.Component<Props> {
+class Scalable extends React.Component<Props> {
   element!: HTMLDivElement;
 
   resizeObserver!: ResizeObserver;
@@ -36,7 +44,7 @@ class Resizable extends React.Component<Props> {
   };
 
   handleScale: ResizeObserverCallback = (entries) => {
-    const { baseLayout, onLayoutChange, onContainerShapeChange } = this.props;
+    const { layout, baseLayout, onLayoutChange, onContainerShapeChange, onScale } = this.props;
     const {
       contentRect: { width, height },
     } = entries[0];
@@ -53,6 +61,17 @@ class Resizable extends React.Component<Props> {
       width: newLayout.width,
       height: newLayout.height,
     });
+    onScale?.(newLayout, layout, {
+      baseLayout,
+      size: {
+        width,
+        height,
+      },
+      oldSize: {
+        width: lastWidth,
+        height: lastHeight,
+      },
+    });
   };
 
   getChild() {
@@ -66,4 +85,4 @@ class Resizable extends React.Component<Props> {
   }
 }
 
-export default Resizable;
+export default Scalable;

@@ -1,7 +1,14 @@
 import React, { CSSProperties, DragEventHandler } from 'react';
-import { RequiredLayout, Position, DragDirection } from '../types';
+import { RequiredLayout, Position, DragDirection, Item, Key } from '../types';
 import { dragElement } from '../utils';
 import { DraggingData } from './Draggable';
+
+export type DragDetail = {
+  layout: RequiredLayout;
+  draggedItem: Item;
+  targetItemKey: Key;
+  nativeEvent: DragEvent;
+};
 
 type Props = {
   style?: CSSProperties;
@@ -9,6 +16,7 @@ type Props = {
   layout: RequiredLayout;
   onLayoutChange: (layout: RequiredLayout) => void;
   onBaseLayoutChange: (layout: RequiredLayout) => void;
+  onDrag?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: DragDetail) => void;
 };
 
 type State = {
@@ -56,7 +64,7 @@ class Droppable extends React.PureComponent<Props, State> {
   };
 
   handleDrop: DragEventHandler = (e) => {
-    const { position, layout, onLayoutChange, onBaseLayoutChange } = this.props;
+    const { position, layout, onLayoutChange, onBaseLayoutChange, onDrag } = this.props;
     const { dragDirection } = this.state;
     const draggedItem = DraggingData.item;
     if (!position || !draggedItem || !dragDirection) {
@@ -67,6 +75,12 @@ class Droppable extends React.PureComponent<Props, State> {
     onBaseLayoutChange(newLayout);
     this.setState({
       dragDirection: null,
+    });
+    onDrag?.(newLayout, layout, {
+      layout,
+      draggedItem,
+      targetItemKey: position.key,
+      nativeEvent: e.nativeEvent,
     });
   };
 

@@ -1,6 +1,6 @@
 import React, { CSSProperties } from 'react';
 import classNames from 'classnames';
-import { Position, RequiredLayout, FatherLayoutMap, MousePosition } from '../types';
+import { Position, RequiredLayout, FatherLayoutMap, MousePosition, ResizeDetail } from '../types';
 import { resizeElement, cloneNodeWith, typeToLayout } from '../utils';
 import ResizableHandler from './ResizableHandler';
 
@@ -13,7 +13,7 @@ type Props = {
   baseLayout: RequiredLayout;
   baseFatherLayoutMap: FatherLayoutMap;
   onResizeStart?: () => void;
-  onResize?: () => void;
+  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void;
   onResizeEnd?: () => void;
   onLayoutChange: (layout: RequiredLayout) => void;
   onBaseLayoutChange: (layout: RequiredLayout) => void;
@@ -29,7 +29,7 @@ class ResizableDivider extends React.PureComponent<Props, State> {
   };
 
   handleResize = (mousePosition: MousePosition, oldMousePosition: MousePosition) => {
-    const { position, baseLayout, onLayoutChange, onResize } = this.props;
+    const { position, baseLayout, onLayoutChange, onResize, layout } = this.props;
     const baseFatherLayout = this.baseFatherLayout();
     const moved =
       baseFatherLayout.direction === 'horizontal'
@@ -41,11 +41,16 @@ class ResizableDivider extends React.PureComponent<Props, State> {
         return newFatherLayout;
       }
       return undefined;
-    });
+    }) as RequiredLayout;
     if (typeToLayout(newLayout)) {
       onLayoutChange(newLayout);
     }
-    onResize?.();
+    onResize?.(newLayout, layout, {
+      baseLayout,
+      mousePosition,
+      oldMousePosition,
+      resizeItemKey: position.key,
+    });
   };
 
   handleResizeEnd = (mousePosition: MousePosition, oldMousePosition) => {
