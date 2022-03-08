@@ -17,7 +17,6 @@ class DragItem extends React.Component<Props, State> {
       };
     }
     return {
-      border: '1px solid pink',
       ...renderPosition(position),
     };
   }

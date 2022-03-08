@@ -1,18 +1,23 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Item } from '../types';
-import { DRAG_DATA_KEY } from '../constants';
 
 type Props = {
   item: Item;
 };
 
+export const DraggingData: { item: Item | null } = { item: null };
+
 const Draggable: React.FC<Props> = ({ item, children }) => {
   const ref = useRef<HTMLElement>(null!);
   const child = React.Children.only(children) as any;
 
-  const handleDragStart = useCallback((e: DragEvent) => {
-    e.dataTransfer?.setData(DRAG_DATA_KEY, JSON.stringify(item));
-  }, []);
+  const handleDragStart = useCallback(() => {
+    DraggingData.item = item;
+  }, [item]);
+
+  const handleDragEnd = useCallback(() => {
+    DraggingData.item = null;
+  }, [item]);
 
   const handleRef = (element: HTMLElement) => {
     ref.current = element;
@@ -28,8 +33,12 @@ const Draggable: React.FC<Props> = ({ item, children }) => {
 
   useEffect(() => {
     ref.current.addEventListener('dragstart', handleDragStart);
-    return () => ref.current.removeEventListener('dragstart', handleDragStart);
-  }, [ref.current]);
+    ref.current.addEventListener('dragend', handleDragEnd);
+    return () => {
+      ref.current.removeEventListener('dragstart', handleDragStart);
+      ref.current.removeEventListener('dragend', handleDragEnd);
+    };
+  }, [ref.current, handleDragStart, handleDragEnd]);
 
   return React.cloneElement(child, {
     ref: handleRef,

@@ -11,16 +11,9 @@ import {
   Position,
   Offset,
   Key,
+  FatherLayoutMap,
+  DragDirection,
 } from './types';
-
-// 父布局容器表: 布局节点key -> 父布局容器
-type FatherLayoutMap = Map<Key, RequiredLayout>;
-
-// 根布局表: 根布局容器 -> 父布局容器表
-type RequiredLayoutToKeyMap = WeakMap<RequiredLayout, FatherLayoutMap>;
-
-// 缓存根布局表
-const cacheMap: RequiredLayoutToKeyMap = new WeakMap<RequiredLayout, FatherLayoutMap>();
 
 /**
  * 类型断言: 判断是布局容器还是布局元素
@@ -43,31 +36,88 @@ export function assignMap(targetMap: Map<any, any>, ...fromMap: Map<any, any>[])
 }
 
 /**
- * 缓存父布局容器表
+ * 从布局容器构建父布局容器表
  */
-export function cacheFatherLayoutMap(
+export function convertLayoutToFatherLayoutMap(requiredLayout: RequiredLayout): FatherLayoutMap {
+  const fatherLayoutMap: FatherLayoutMap = new Map<Key, RequiredLayout>();
+  requiredLayout.children.forEach((child) => {
+    fatherLayoutMap.set(child.key, requiredLayout);
+    if (typeToLayout(child)) {
+      const map = convertLayoutToFatherLayoutMap(child);
+      assignMap(fatherLayoutMap, map);
+    }
+  });
+  return fatherLayoutMap;
+}
+
+/**
+ * 从容器布局获取所有分割线对应节点的位置信息
+ */
+export function convertLayoutToDividerPositions(
   requiredLayout: RequiredLayout,
-  fatherLayoutMap: FatherLayoutMap
-) {
-  cacheMap.set(requiredLayout, fatherLayoutMap);
+  positionMap: PositionMap
+): Array<Position> {
+  const positions: Array<Position> = [];
+  requiredLayout.children.forEach((child, index) => {
+    if (index !== requiredLayout.children.length - 1) {
+      positions.push(positionMap.get(child.key)!);
+    }
+    if (typeToLayout(child)) {
+      const childLayoutPositions = convertLayoutToDividerPositions(child, positionMap);
+      positions.push(...childLayoutPositions);
+    }
+  });
+  return positions;
 }
 
 /**
- * 获取父布局容器表
+ * 从容器布局获取所有交叉点对应节点的位置信息
+ *
+ * @returns 返回一个元组数组，元组第一项为横向调整节点的位置信息，元组第二项为纵向调整节点的位置信息
  */
-export function getFatherLayoutMapFromCache(requiredLayout: RequiredLayout) {
-  return cacheMap.get(requiredLayout);
-}
-
-/**
- * 根据布局元素key和根布局容器获取该布局容器的父容器
- */
-export function getFatherLayoutByItemKey(
-  itemKey: Key,
-  layout: RequiredLayout
-): RequiredLayout | undefined {
-  const fatherLayoutMap = getFatherLayoutMapFromCache(layout);
-  return fatherLayoutMap?.get(itemKey);
+export function convertLayoutToPointerPositionTuples(
+  requiredLayout: RequiredLayout,
+  positionMap: PositionMap
+): Array<[Position, Position]> {
+  const positionTuples: Array<[Position, Position]> = [];
+  requiredLayout.children.forEach((child, index) => {
+    if (!typeToLayout(child)) {
+      return;
+    }
+    const lastChild = requiredLayout.children[index - 1];
+    const nextChild = requiredLayout.children[index + 1];
+    if (lastChild) {
+      child.children.forEach((_child, _index) => {
+        if (_index === child.children.length - 1) {
+          return;
+        }
+        const lastChildPosition = positionMap.get(lastChild.key)!;
+        const curPosition = positionMap.get(_child.key)!;
+        if (requiredLayout.direction === 'horizontal') {
+          positionTuples.push([lastChildPosition, curPosition]);
+        } else {
+          positionTuples.push([curPosition, lastChildPosition]);
+        }
+      });
+    }
+    if (nextChild) {
+      child.children.forEach((_child, _index) => {
+        if (_index === child.children.length - 1) {
+          return;
+        }
+        const childPosition = positionMap.get(child.key)!;
+        const curPosition = positionMap.get(_child.key)!;
+        if (requiredLayout.direction === 'horizontal') {
+          positionTuples.push([childPosition, curPosition]);
+        } else {
+          positionTuples.push([curPosition, childPosition]);
+        }
+      });
+    }
+    const childPositionTuples = convertLayoutToPointerPositionTuples(child, positionMap);
+    positionTuples.push(...childPositionTuples);
+  });
+  return positionTuples;
 }
 
 /**
@@ -109,7 +159,9 @@ export function cloneItem(item: RequiredItem): RequiredItem {
  */
 export function cloneNodeWith(
   node: RequiredLayout | RequiredItem,
-  customizer: (child: RequiredLayout | RequiredItem) => RequiredLayout | RequiredItem | undefined = () => undefined
+  customizer: (
+    child: RequiredLayout | RequiredItem
+  ) => RequiredLayout | RequiredItem | undefined = () => undefined
 ): RequiredLayout | RequiredItem {
   const _node = customizer(node);
   if (_node) {
@@ -170,8 +222,7 @@ export function formatLayout(
   layout: Layout,
   shape: Size,
   rootKey: Key = ROOT_LAYOUT_KEY
-): [RequiredLayout, FatherLayoutMap] {
-  const fatherLayoutMap: FatherLayoutMap = new Map<Key, RequiredLayout>();
+): RequiredLayout {
   const factShape: Size = {
     width: layout.width ?? shape.width,
     height: layout.height ?? shape.height,
@@ -192,20 +243,16 @@ export function formatLayout(
     }
     if (typeToLayout(child)) {
       const childLayoutKey = `${rootKey}_${index}`;
-      fatherLayoutMap.set(childLayoutKey, requiredLayout);
-      const [_layout, map] = formatLayout(child, _shape, childLayoutKey);
+      const _layout = formatLayout(child, _shape, childLayoutKey);
       requiredLayout.children.push(_layout);
-      assignMap(fatherLayoutMap, map);
     } else {
-      fatherLayoutMap.set(child.key, requiredLayout);
       requiredLayout.children.push({
         ...child,
         ..._shape,
       });
     }
   });
-  cacheFatherLayoutMap(requiredLayout, fatherLayoutMap);
-  return [requiredLayout, fatherLayoutMap];
+  return requiredLayout;
 }
 
 /**
@@ -217,10 +264,9 @@ export function convertLayoutToPositionMap(
     x: 0,
     y: 0,
   }
-): [PositionMap, PositionMap] {
-  const itemPositionMap: PositionMap = new Map<string, Position>();
-  const layoutPositionMap: PositionMap = new Map<string, Position>();
-  layoutPositionMap.set(layout.key, {
+): PositionMap {
+  const positionMap: PositionMap = new Map<string, Position>();
+  positionMap.set(layout.key, {
     key: layout.key,
     width: layout.width,
     height: layout.height,
@@ -232,11 +278,10 @@ export function convertLayoutToPositionMap(
   };
   layout.children.forEach((child) => {
     if (typeToLayout(child)) {
-      const [itemMap, layoutMap] = convertLayoutToPositionMap(child, childOffset);
-      assignMap(itemPositionMap, itemMap);
-      assignMap(layoutPositionMap, layoutMap);
+      const map = convertLayoutToPositionMap(child, childOffset);
+      assignMap(positionMap, map);
     } else {
-      itemPositionMap.set(child.key, {
+      positionMap.set(child.key, {
         key: child.key,
         width: child.width,
         height: child.height,
@@ -249,7 +294,7 @@ export function convertLayoutToPositionMap(
       childOffset.y += child.height;
     }
   });
-  return [itemPositionMap, layoutPositionMap];
+  return positionMap;
 }
 
 /**
@@ -422,92 +467,136 @@ export function resizeElement(
 }
 
 /**
- * 拖拽调整布局结构
+ * 从布局中删除一个节点
  *
  * 不修改原对象
  */
-export function dragItem(layout: RequiredLayout, draggedItem: RequiredItem, targetItemKey: Key, dragDirection: string) {
-  const draggedFatherLayout = getFatherLayoutByItemKey(draggedItem.key, layout);
-  const targetFatherLayout = getFatherLayoutByItemKey(targetItemKey, layout)!;
-  let newDraggedLayout: RequiredLayout | RequiredItem = null!;
-  let newTargetLayout: RequiredLayout | RequiredItem = null!;
-  if (draggedFatherLayout) {
-    if (draggedFatherLayout.children.length === 2) {
-      const child = draggedFatherLayout.children.find(c => c.key !== draggedItem.key)!;
-      [newDraggedLayout] = scaleNode(child, {
-        width: draggedFatherLayout.width - child.width,
-        height: draggedFatherLayout.height - child.height,
-      });
-    } else {
-      const child = draggedFatherLayout.children.find(c => c.key === draggedItem.key)!;
-      const newLayout: RequiredLayout = {
-        ...draggedFatherLayout,
-        children: draggedFatherLayout.children.filter(r => r.key !== draggedItem.key),
-        width: draggedFatherLayout.width - child.width,
-        height: draggedFatherLayout.height - child.height,
-      };
-      [newDraggedLayout] = scaleNode(newLayout, {
-        width: draggedFatherLayout.width - child.width,
-        height: draggedFatherLayout.height - child.height,
-      });
-    }
+export function removeElement(layout: RequiredLayout, removedItemKey: Key): RequiredLayout {
+  const fatherLayoutMap = convertLayoutToFatherLayoutMap(layout);
+  const fatherLayout = fatherLayoutMap.get(removedItemKey);
+  if (!fatherLayout) {
+    return cloneNodeWith(layout) as RequiredLayout;
   }
-  const map = {
-    horizontal: ['left', 'right'],
-    vertical: ['top', 'bottom'],
+  const removedItem = fatherLayout.children.find((c) => c.key === removedItemKey)!;
+  if (fatherLayout.children.length === 2 && fatherLayout !== layout) {
+    const anotherChild = fatherLayout.children.find((c) => c.key !== removedItemKey)!;
+    const [newChild] = scaleNode(anotherChild, {
+      width: fatherLayout.width - anotherChild.width,
+      height: fatherLayout.height - anotherChild.height,
+    });
+    return cloneNodeWith(layout, (child) => {
+      if (child === fatherLayout) {
+        return newChild;
+      }
+      return undefined;
+    }) as RequiredLayout;
+  }
+  let newFatherLayout: RequiredLayout = {
+    ...fatherLayout,
+    children: fatherLayout.children.filter((c) => c.key !== removedItemKey),
+    width: fatherLayout.direction === 'horizontal' ? fatherLayout.width - removedItem.width : fatherLayout.width,
+    height: fatherLayout.direction === 'vertical' ? fatherLayout.height - removedItem.height : fatherLayout.height,
   };
-  const after = dragDirection === 'bottom' || dragDirection === 'right';
-  const { children } = targetFatherLayout;
-  const index = findChildIndex(targetFatherLayout, targetItemKey);
-  const targetItem = children[index] as RequiredItem;
-  const newSize: Size = {
-    width: targetFatherLayout.direction === 'horizontal' ? targetItem.width / 2 : targetItem.width,
-    height: targetFatherLayout.direction === 'vertical' ? targetItem.height / 2 : targetItem.height,
-  };
-  const newTargetChild: RequiredItem = {
-    ...targetItem,
-    ...newSize,
-  };
-  const newDraggedChild: RequiredItem = {
-    ...draggedItem,
-    ...newSize,
-  };
-  if (Object.keys(map).some(i => targetFatherLayout.direction === i && map[i].includes(dragDirection))) {
-    let newLayout: RequiredLayout = null!;
-    if (after) {
-      newLayout = {
-        ...targetFatherLayout,
-        children: [...children.slice(0, index), newTargetChild, newDraggedChild, ...children.slice(index + 1)],
-      };
-    } else {
-      newLayout = {
-        ...targetFatherLayout,
-        children: [...children.slice(0, index), newDraggedChild, newTargetChild, ...children.slice(index + 1)],
-      };
+  [newFatherLayout] = scaleLayout(newFatherLayout, {
+    width: fatherLayout.direction === 'horizontal' ? removedItem.width : 0,
+    height: fatherLayout.direction === 'vertical' ? removedItem.height : 0,
+  });
+  return cloneNodeWith(layout, (child) => {
+    if (child === fatherLayout) {
+      return newFatherLayout;
     }
-    newTargetLayout = cloneNodeWith(newLayout);
-  } else {
-    const newLayout: RequiredLayout = {
-      key: `${targetFatherLayout.key}_${index}`,
-      children: after ? [newTargetChild, newDraggedChild] : [newDraggedLayout, newTargetLayout],
-      direction: targetFatherLayout.direction === 'horizontal' ? 'vertical' : 'horizontal',
-      type: 'layout',
-      width: targetItem.width,
-      height: targetItem.height,
+    return undefined;
+  }) as RequiredLayout;
+}
+
+/**
+ * 拖拽调整布局
+ *
+ * 不修改原对象
+ */
+export function dragElement(
+  layout: RequiredLayout,
+  draggedItemKey: Key,
+  targetItemKey: Key,
+  dragDirection: DragDirection
+): RequiredLayout {
+  const layoutWithoutDraggedItem = removeElement(layout, draggedItemKey);
+  const fatherLayoutMap = convertLayoutToFatherLayoutMap(layoutWithoutDraggedItem);
+  const fatherLayout = fatherLayoutMap.get(targetItemKey)!;
+  let newFatherLayout: RequiredLayout = null!;
+  if (dragDirection === 'center') {
+    // 替换
+    newFatherLayout = cloneNodeWith(fatherLayout, (child) => {
+      if (child.key === targetItemKey) {
+        return {
+          ...child,
+          key: draggedItemKey,
+        };
+      }
+      return undefined;
+    }) as RequiredLayout;
+  } else if (
+    (fatherLayout.direction === 'horizontal' && ['left', 'right'].includes(dragDirection)) ||
+    (fatherLayout.direction === 'vertical' && ['top', 'bottom'].includes(dragDirection))
+  ) {
+    // 新增
+    const targetIndex = findChildIndex(fatherLayout, targetItemKey);
+    const targetChild = fatherLayout.children[targetIndex] as RequiredItem;
+    const [newTargetChild] = scaleItem(targetChild, {
+      width: fatherLayout.direction === 'horizontal' ? -targetChild.width / 2 : 0,
+      height: fatherLayout.direction === 'vertical' ? -targetChild.height / 2 : 0,
+    });
+    const draggedChild: RequiredItem = {
+      key: draggedItemKey,
+      type: 'item',
+      width: fatherLayout.direction === 'horizontal' ? targetChild.width / 2 : targetChild.width,
+      height: fatherLayout.direction === 'vertical' ? targetChild.height / 2 : targetChild.height,
     };
-    newTargetLayout = cloneNodeWith(targetFatherLayout, c => {
-      if (c.key === targetItem.key) {
+    const { children } = fatherLayout;
+    const before = children.filter((_, i) => i < targetIndex);
+    const after = children.filter((_, i) => i > targetIndex);
+    newFatherLayout = cloneNodeWith({
+      ...fatherLayout,
+      children: ['left', 'top'].includes(dragDirection)
+        ? [...before, draggedChild, newTargetChild, ...after]
+        : [...before, newTargetChild, draggedChild, ...after],
+    }) as RequiredLayout;
+  } else {
+    // 新增布局
+    const targetIndex = findChildIndex(fatherLayout, targetItemKey);
+    const targetChild = fatherLayout.children[targetIndex] as RequiredItem;
+    const direction: Direction =
+      fatherLayout.direction === 'horizontal' ? 'vertical' : 'horizontal';
+    const [newTargetChild] = scaleItem(targetChild, {
+      width: direction === 'horizontal' ? -targetChild.width / 2 : 0,
+      height: direction === 'vertical' ? -targetChild.height / 2 : 0,
+    });
+    const draggedChild: RequiredItem = {
+      key: draggedItemKey,
+      type: 'item',
+      width: direction === 'horizontal' ? targetChild.width / 2 : targetChild.width,
+      height: direction === 'vertical' ? targetChild.height / 2 : targetChild.height,
+    };
+    const newLayout: RequiredLayout = {
+      key: `${fatherLayout.key}_${targetIndex}`,
+      type: 'layout',
+      direction,
+      width: targetChild.width,
+      height: targetChild.height,
+      children: ['left', 'top'].includes(dragDirection)
+        ? [draggedChild, newTargetChild]
+        : [newTargetChild, draggedChild],
+    };
+    newFatherLayout = cloneNodeWith(fatherLayout, (child) => {
+      if (child === targetChild) {
         return newLayout;
       }
       return undefined;
-    });
+    }) as RequiredLayout;
   }
-  return cloneNodeWith(layout, node => {
-    if (node.key === draggedFatherLayout?.key) {
-      return newDraggedLayout;
-    }
-    if (node.key === targetFatherLayout.key) {
-      return newTargetLayout;
+  return cloneNodeWith(layoutWithoutDraggedItem, (child) => {
+    if (child === fatherLayout) {
+      return newFatherLayout;
     }
     return undefined;
   }) as RequiredLayout;

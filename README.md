@@ -1,4 +1,4 @@
-<h1 align="center">react-monaco-editor</h1>
+<h1 align="center">react-drag-layout</h1>
 
 ## Demo
 

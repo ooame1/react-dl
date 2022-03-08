@@ -1,7 +1,7 @@
 import React, { CSSProperties, DragEventHandler } from 'react';
-import { DRAG_DATA_KEY } from '../constants';
-import { dragItem, noop } from '../utils';
-import { RequiredLayout, Position } from '../types';
+import { RequiredLayout, Position, DragDirection } from '../types';
+import { dragElement } from '../utils';
+import { DraggingData } from './Draggable';
 
 type Props = {
   style?: CSSProperties;
@@ -11,52 +11,102 @@ type Props = {
   onBaseLayoutChange: (layout: RequiredLayout) => void;
 };
 
-type State = {};
+type State = {
+  dragDirection: DragDirection | null;
+};
 
-class Droppable extends React.Component<Props, State> {
-
-  // eslint-disable-next-line class-methods-use-this
-  handleDragEnter: DragEventHandler = (e) => {
-    // console.log(e);
-  }
-
-  // eslint-disable-next-line class-methods-use-this
-  handleDragOver: DragEventHandler = (e) => {
-    // console.log(e);
-    e.preventDefault();
+class Droppable extends React.PureComponent<Props, State> {
+  state: State = {
+    dragDirection: null,
   };
 
-  // eslint-disable-next-line class-methods-use-this
+  handleDragLeave: DragEventHandler = (e) => {
+    this.setState({
+      dragDirection: null,
+    });
+  };
+
+  handleDragOver: DragEventHandler = (e) => {
+    const { position } = this.props;
+    const draggedItem = DraggingData.item;
+    if (draggedItem && position) {
+      e.preventDefault();
+    }
+    if (!draggedItem || !position || draggedItem.key === position.key) {
+      this.setState({
+        dragDirection: null,
+      });
+      return;
+    }
+    let dragDirection: DragDirection = 'center';
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const { clientX, clientY } = e;
+    if (clientY - top < height / 6) {
+      dragDirection = 'top';
+    } else if (left + width - clientX < width / 6) {
+      dragDirection = 'right';
+    } else if (top + height - clientY < height / 6) {
+      dragDirection = 'bottom';
+    } else if (clientX - left < width / 6) {
+      dragDirection = 'left';
+    }
+    this.setState({
+      dragDirection,
+    });
+  };
+
   handleDrop: DragEventHandler = (e) => {
-    let draggedItem: any;
-    try {
-      draggedItem = JSON.parse(e.dataTransfer.getData(DRAG_DATA_KEY));
-    } catch {
-      noop();
-    }
-    if (!draggedItem?.key) {
-      return;
-    }
     const { position, layout, onLayoutChange, onBaseLayoutChange } = this.props;
-    if (!position) {
+    const { dragDirection } = this.state;
+    const draggedItem = DraggingData.item;
+    if (!position || !draggedItem || !dragDirection) {
       return;
     }
-    const newLayout = dragItem(layout, draggedItem, position.key, 'right');
+    const newLayout = dragElement(layout, draggedItem.key, position.key, dragDirection);
     onLayoutChange(newLayout);
     onBaseLayoutChange(newLayout);
+    this.setState({
+      dragDirection: null,
+    });
+  };
+
+  createMaskStyle(): CSSProperties {
+    const { dragDirection } = this.state;
+    const { position } = this.props;
+    if (!dragDirection || !position) {
+      return {
+        display: 'none',
+      };
+    }
+    return {
+      left: dragDirection === 'right' ? `${position.x + position.width / 2}px` : `${position.x}px`,
+      top: dragDirection === 'bottom' ? `${position.y + position.height / 2}px` : `${position.y}px`,
+      width: ['right', 'left'].includes(dragDirection)
+        ? `${position.width / 2}px`
+        : `${position.width}px`,
+      height: ['top', 'bottom'].includes(dragDirection)
+        ? `${position.height / 2}px`
+        : `${position.height}px`,
+    };
   }
 
   render() {
     const child = React.Children.only(this.props.children as any);
-    return React.cloneElement(child, {
+    const newChild = React.cloneElement(child, {
       style: {
         ...child.props.style,
         ...this.props.style,
       },
+      onDragLeave: this.handleDragLeave,
       onDragOver: this.handleDragOver,
-      onDragEnter: this.handleDragEnter,
       onDrop: this.handleDrop,
     });
+    return (
+      <>
+        {newChild}
+        <div className="react-drag-mask" style={this.createMaskStyle()} />
+      </>
+    );
   }
 }
 

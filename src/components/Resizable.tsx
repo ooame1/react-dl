@@ -1,161 +1,124 @@
-import React, { CSSProperties, MouseEventHandler } from 'react';
-import { Position, RequiredLayout } from '../types';
+import React from 'react';
+import memoize from 'memoize-one';
+import { Position, PositionMap, RequiredLayout } from '../types';
 import {
-  renderPosition,
-  findChildIndex,
-  getFatherLayoutByItemKey,
-  resizeElement,
-  cloneNodeWith,
-  typeToLayout,
+  convertLayoutToFatherLayoutMap,
+  convertLayoutToDividerPositions,
+  convertLayoutToPointerPositionTuples,
 } from '../utils';
-
-type MousePosition = {
-  x: number;
-  y: number;
-};
+import ResizableDivider from './ResizableDivider';
+import ResizablePointer from './ResizablePointer';
 
 type Props = {
-  position?: Position;
+  positionMap: PositionMap;
   baseLayout: RequiredLayout;
   layout: RequiredLayout;
-  onDragStart?: () => void;
-  onDrag?: () => void;
-  onDragEnd?: () => void;
+  onResizeStart?: () => void;
+  onResize?: () => void;
+  onResizeEnd?: () => void;
   onBaseLayoutChange: (baseLayout: RequiredLayout) => void;
   onLayoutChange: (layout: RequiredLayout) => void;
 };
 
-type State = {};
-
-const DIVIDER_WIDTH = 5;
+type State = {
+  mouseEnterPositionTuple: [Position, Position] | null;
+  resizingPositionTuple: [Position, Position] | null;
+};
 
 class Resizable extends React.Component<Props, State> {
-  dragStartMouse!: MousePosition;
+  convertFatherMap = memoize(convertLayoutToFatherLayoutMap);
 
-  ownDocument!: Document;
-
-  getDividerPosition(): Position | undefined {
-    const { position } = this.props;
-    if (!position) {
-      return undefined;
+  activeDividerPosition = memoize(
+    (
+      mouseEnterPositionTuple: [Position, Position] | null,
+      resizingPositionTuple: [Position, Position] | null
+    ) => {
+      return [...(mouseEnterPositionTuple || []), ...(resizingPositionTuple || [])];
     }
-    const fatherLayout = this.getCurrentFatherLayout();
-    if (!fatherLayout) {
-      return undefined;
-    }
-    const { direction } = fatherLayout;
-    let { width, height, x, y } = position;
-    x += direction === 'horizontal' ? width - DIVIDER_WIDTH / 2 : 0;
-    y += direction === 'vertical' ? height - DIVIDER_WIDTH / 2 : 0;
-    width = direction === 'horizontal' ? DIVIDER_WIDTH : width;
-    height = direction === 'vertical' ? DIVIDER_WIDTH : height;
-    return {
-      ...position,
-      x,
-      y,
-      width,
-      height,
-    };
-  }
+  );
 
-  getBaseFatherLayout(): RequiredLayout | undefined {
-    const { position, baseLayout } = this.props;
-    if (!position) {
-      return undefined;
-    }
-    const { key } = position;
-    return getFatherLayoutByItemKey(key, baseLayout)!;
-  }
-
-  getCurrentFatherLayout(): RequiredLayout | undefined {
-    const { position, layout } = this.props;
-    if (!position) {
-      return undefined;
-    }
-    const { key } = position;
-    return getFatherLayoutByItemKey(key, layout)!;
-  }
-
-  handleResizeStart: MouseEventHandler<HTMLDivElement> = (e) => {
-    this.dragStartMouse = {
-      x: e.clientX,
-      y: e.clientY,
-    };
-    this.ownDocument = e.currentTarget.ownerDocument;
-    const { onDragStart, onBaseLayoutChange, layout } = this.props;
-    onDragStart?.();
-    onBaseLayoutChange(layout);
-    this.patchEvent(e);
+  state: State = {
+    mouseEnterPositionTuple: null,
+    resizingPositionTuple: null,
   };
 
-  handleResize = (e: MouseEvent) => {
-    const { position, baseLayout, onLayoutChange } = this.props;
-    const currentFatherLayout = this.getCurrentFatherLayout();
-    const baseFatherLayout = this.getBaseFatherLayout();
-    if (!position || !currentFatherLayout || !baseFatherLayout) {
-      return;
-    }
-    const moved =
-      currentFatherLayout.direction === 'horizontal'
-        ? e.clientX - this.dragStartMouse.x
-        : e.clientY - this.dragStartMouse.y;
-    const [newFatherLayout] = resizeElement(baseFatherLayout, position.key, moved);
-    const newLayout = cloneNodeWith(baseLayout, (child) => {
-      if (child === baseFatherLayout) {
-        return newFatherLayout;
-      }
-      return undefined;
+  handleMouseEnterPositionTupleChange = (positionTuple: [Position, Position] | null) => {
+    this.setState({
+      mouseEnterPositionTuple: positionTuple,
     });
-    if (typeToLayout(newLayout)) {
-      onLayoutChange(newLayout);
-    }
   };
 
-  handleResizeEnd = (e: MouseEvent) => {
-    const { onBaseLayoutChange, layout } = this.props;
-    onBaseLayoutChange(layout);
-    this.patchEvent(e as any, true);
+  handleResizingPositionTupleChange = (positionTuple: [Position, Position] | null) => {
+    this.setState({
+      resizingPositionTuple: positionTuple,
+    });
   };
 
-  createDividerStyle(): CSSProperties {
-    const position = this.getDividerPosition();
-    if (!position) {
-      return {
-        display: 'none',
-      };
-    }
-    const { key } = position;
-    const fatherLayout = this.getCurrentFatherLayout()!;
-    const itemIndex = findChildIndex(fatherLayout, key);
-    if (itemIndex === fatherLayout.children.length - 1) {
-      return {
-        display: 'none',
-      };
-    }
-    const { direction } = fatherLayout;
-    return {
-      ...renderPosition(position),
-      cursor: direction === 'horizontal' ? 'ew-resize' : 'ns-resize',
-    };
+  baseFatherLayoutMap() {
+    return this.convertFatherMap(this.props.baseLayout);
   }
 
-  patchEvent(e: React.MouseEvent<HTMLDivElement>, remove = false) {
-    if (remove) {
-      this.ownDocument.removeEventListener('mousemove', this.handleResize);
-      this.ownDocument.removeEventListener('mouseup', this.handleResizeEnd);
-    } else {
-      this.ownDocument = e.currentTarget.ownerDocument;
-      e.currentTarget.ownerDocument.addEventListener('mousemove', this.handleResize);
-      e.currentTarget.ownerDocument.addEventListener('mouseup', this.handleResizeEnd);
-    }
+  processDividerPosition(position: Position) {
+    const {
+      onResizeStart,
+      onResize,
+      onResizeEnd,
+      onLayoutChange,
+      onBaseLayoutChange,
+      layout,
+      baseLayout,
+    } = this.props;
+    const { mouseEnterPositionTuple, resizingPositionTuple } = this.state;
+    const baseFatherLayoutMap = this.baseFatherLayoutMap();
+    const active = this.activeDividerPosition(mouseEnterPositionTuple, resizingPositionTuple).some(
+      (p) => p.key === position.key
+    );
+    return (
+      <ResizableDivider
+        active={active}
+        key={position.key}
+        position={position}
+        onResizeStart={onResizeStart}
+        onResize={onResize}
+        onResizeEnd={onResizeEnd}
+        onLayoutChange={onLayoutChange}
+        baseFatherLayoutMap={baseFatherLayoutMap}
+        baseLayout={baseLayout}
+        layout={layout}
+        onBaseLayoutChange={onBaseLayoutChange}
+      />
+    );
+  }
+
+  processPointerPositionTuple(positionTuple: [Position, Position]) {
+    const { onLayoutChange, layout, baseLayout, onBaseLayoutChange } = this.props;
+    const { handleMouseEnterPositionTupleChange, handleResizingPositionTupleChange } = this;
+    const baseFatherLayoutMap = this.baseFatherLayoutMap();
+    return (
+      <ResizablePointer
+        key={`${positionTuple[0].key}__${positionTuple[1].key}`}
+        positionTuple={positionTuple}
+        onLayoutChange={onLayoutChange}
+        baseLayout={baseLayout}
+        layout={layout}
+        onBaseLayoutChange={onBaseLayoutChange}
+        onMouseEnterPositionTupleChange={handleMouseEnterPositionTupleChange}
+        onResizingPositionTupleChange={handleResizingPositionTupleChange}
+        baseFatherLayoutMap={baseFatherLayoutMap}
+      />
+    );
   }
 
   render() {
-    const { children } = this.props;
+    const { layout, positionMap } = this.props;
+    const dividerPositions = convertLayoutToDividerPositions(layout, positionMap);
+    const pointerPositionTuples = convertLayoutToPointerPositionTuples(layout, positionMap);
     return (
       <>
-        {children}
-        <div style={this.createDividerStyle()} onMouseDown={this.handleResizeStart} />
+        {dividerPositions.map((position) => this.processDividerPosition(position))}
+        {pointerPositionTuples.map((positionTuple) =>
+          this.processPointerPositionTuple(positionTuple)
+        )}
       </>
     );
   }

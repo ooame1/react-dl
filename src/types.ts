@@ -2,6 +2,8 @@ export type Key = string;
 
 export type Direction = 'vertical' | 'horizontal';
 
+export type DragDirection = 'top' | 'right' | 'bottom' | 'left' | 'center';
+
 // 盒子
 export type Size = {
   width: number;
@@ -55,4 +57,13 @@ export type Position = {
   key: Key;
 } & Size & Offset;
 
-export type PositionMap = Map<string, Position>;
+// 位置信息表
+export type PositionMap = Map<Key, Position>;
+
+// 父布局容器表
+export type FatherLayoutMap = Map<Key, RequiredLayout>;
+
+export type MousePosition = {
+  x: number;
+  y: number;
+};
