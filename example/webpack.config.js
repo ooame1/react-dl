@@ -1,4 +1,5 @@
 const path = require("path");
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 process.env.BABEL_ENV = 'development';
 process.env.NODE_ENV = 'development';
@@ -8,15 +9,11 @@ module.exports = {
   mode: "development",
   devtool: "source-map",
   output: {
-    path: path.join(__dirname, "./lib/t"),
-    filename: "index.js",
+    path: path.join(__dirname, "dist"),
+    filename: 'index.js'
   },
   module: {
     rules: [
-      {
-        test: /\.html$/,
-        use: ["file?name=[name].[ext]"],
-      },
       {
         test: /\.(js|mjs|jsx|ts|tsx)$/,
         exclude: /node_modules/,
@@ -56,4 +53,9 @@ module.exports = {
     extensions: [".js", ".json", ".ts", ".tsx"]
   },
   devServer: { contentBase: "./" },
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: 'index.html',
+    })
+  ]
 };
