@@ -190,3 +190,7 @@ export type Item = {
   height?: number;
 };
 ```
+
+## License
+
+MIT, see the [LICENSE](/LICENSE.md) file for detail.
