@@ -1,6 +1,6 @@
-# React-Drag-Layout
+# React-DL
 
-React-Drag-Layout是一个基于绝对位置定位、适用于React的可拖拽布局组件。布局结构完全由数据控制，支持受控与非受控。
+React-DL是一个基于绝对位置定位、适用于React的可拖拽布局组件。布局结构完全由数据控制，支持受控与非受控。
 
 ![EXAMPLE](./example.gif)
 
@@ -32,23 +32,23 @@ yarn start
 
 ```bash
 # 使用npm安装
-npm install react-drag-layout
+npm install react-dl
 
 # 使用yarn安装
-yarn add react-drag-layout
+yarn add react-dl
 ```
 
 2. 引入样式文件。
 
 ```js
-import 'react-drag-layout/css/styles.css';
+import 'react-dl/css/styles.css';
 ```
 
 3. 引入组件构建可拖拽布局。
 
 ```jsx
 import { useState } from 'react';
-import DragLayout, { Draggable } from 'react-drag-layout';
+import DlLayout, { Draggable } from 'react-dl';
 
 function App() {
   // 指定布局
@@ -69,17 +69,17 @@ function App() {
   const [baseLayout, setBaseLayout] = useState(defaultLayout);
   
   return (
-    <DragLayout layout={layout} onLayoutChange={setLayout} onBaseLayoutChange={setBaseLayout}>
+    <DlLayout layout={layout} onLayoutChange={setLayout} onBaseLayoutChange={setBaseLayout}>
       <div key="a" />
       <div key="b" />
-    </DragLayout>
+    </DlLayout>
   );
 }
 ```
 
 ## API
 
-### ReactDragLayout组件
+### DlLayout组件
 
 Props
 

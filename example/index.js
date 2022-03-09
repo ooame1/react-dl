@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import ReactDragLayout, { Draggable } from 'react-drag-layout';
-import 'react-drag-layout/css/styles.css';
+import DlLayout, { Draggable } from '../src';
+import '../css/styles.css';
 import './index.css';
 
 const defaultLayout = {
@@ -69,7 +69,7 @@ const App = () => {
           </Draggable>
         ))}
       </div>
-      <ReactDragLayout
+      <DlLayout
         className="editor-area"
         layout={layout}
         baseLayout={baseLayout}
@@ -97,7 +97,7 @@ const App = () => {
             <textarea defaultValue={`textarea-${item}`} />
           </div>
         ))}
-      </ReactDragLayout>
+      </DlLayout>
     </div>
   );
 };

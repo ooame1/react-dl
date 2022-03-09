@@ -1,5 +1,5 @@
 {
-  "name": "react-drag-layout",
+  "name": "react-dl",
   "version": "0.0.0",
   "description": "基于react的可拖拽布局组件",
   "main": "lib/index.js",
@@ -23,10 +23,10 @@
   ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/linyun-git/react-drag-layout/issues"
+    "url": "https://github.com/linyun-git/react-dl/issues"
   },
-  "homepage": "https://github.com/linyun-git/react-drag-layout",
-  "repository": "https://github.com/linyun-git/react-drag-layout",
+  "homepage": "https://github.com/linyun-git/react-dl",
+  "repository": "https://github.com/linyun-git/react-dl",
   "devDependencies": {
     "@types/react": "^17.0.38",
     "@typescript-eslint/eslint-plugin": "^5.9.1",

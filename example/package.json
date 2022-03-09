@@ -1,5 +1,5 @@
 {
-  "name": "react-drag-layout-example",
+  "name": "react-dl-example",
   "private": true,
   "version": "0.0.0",
   "description": "基于React的可拖拽布局组件",
@@ -28,6 +28,6 @@
   "dependencies": {
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "react-drag-layout": "*"
+    "react-dl": "*"
   }
 }

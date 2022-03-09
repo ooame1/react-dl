@@ -4,7 +4,7 @@ import classNames from 'classnames';
 import Droppable from './components/Droppable';
 import Resizable from './components/Resizable';
 import Scalable from './components/Scalable';
-import DragItem from './DragItem';
+import DlItem from './DlItem';
 import { ROOT_LAYOUT_KEY } from './constants';
 import {
   Layout,
@@ -49,7 +49,7 @@ const emptyLayout: RequiredLayout = {
   width: 0,
 };
 
-class DragLayout extends React.Component<Props, State> {
+class DlLayout extends React.Component<Props, State> {
   static defaultProps: Partial<Props> = {
     initLayout: emptyLayout,
     onLayoutChange: noop,
@@ -166,7 +166,7 @@ class DragLayout extends React.Component<Props, State> {
     const { handleLayoutChange, handleBaseLayoutChange } = this;
     const position = this.createPositionMap(layout).get(child.key as string);
     return (
-      <DragItem key={child.key} position={position}>
+      <DlItem key={child.key} position={position}>
         <Droppable
           position={position}
           layout={layout}
@@ -177,7 +177,7 @@ class DragLayout extends React.Component<Props, State> {
         >
           {child}
         </Droppable>
-      </DragItem>
+      </DlItem>
     );
   }
 
@@ -212,4 +212,4 @@ class DragLayout extends React.Component<Props, State> {
   }
 }
 
-export default DragLayout;
+export default DlLayout;

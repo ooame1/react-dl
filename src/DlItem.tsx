@@ -8,7 +8,7 @@ type Props = {
 
 type State = {};
 
-class DragItem extends React.Component<Props, State> {
+class DlItem extends React.Component<Props, State> {
   createStyle(): CSSProperties {
     const { position } = this.props;
     if (!position) {
@@ -32,4 +32,4 @@ class DragItem extends React.Component<Props, State> {
   }
 }
 
-export default DragItem;
+export default DlItem;
