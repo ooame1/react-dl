@@ -1,5 +1,4 @@
-// eslint-disable-next-line import/no-relative-packages
-import React, { useCallback, useEffect, useRef } from '../../example/node_modules/react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Item } from '../types';
 
 type Props = {

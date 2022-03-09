@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
-import DlLayout, { Draggable } from '../src';
-import '../css/styles.css';
+import DlLayout, { Draggable } from 'react-dl';
+import 'react-dl/css/styles.css';
 import './index.css';
 
 const defaultLayout = {
