@@ -193,4 +193,4 @@ export type Item = {
 
 ## License
 
-MIT, see the [LICENSE](/LICENSE.md) file for detail.
+MIT, 在 [LICENSE](/LICENSE.md) 文件查看详情。
