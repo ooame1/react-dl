@@ -1,7 +1,14 @@
 import React, { CSSProperties } from 'react';
 import classNames from 'classnames';
-import { Position, RequiredLayout, FatherLayoutMap, MousePosition, ResizeDetail } from '../types';
-import { resizeElement, cloneNodeWith, typeToLayout } from '../utils';
+import {
+  Position,
+  RequiredLayout,
+  FatherLayoutMap,
+  MousePosition,
+  ResizeDetail,
+  OptionHandler,
+} from '../types';
+import { applyResize } from '../utils';
 import ResizableHandler from './ResizableHandler';
 
 type Props = {
@@ -13,7 +20,7 @@ type Props = {
   baseLayout: RequiredLayout;
   baseFatherLayoutMap: FatherLayoutMap;
   onResizeStart?: () => void;
-  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void;
+  onResize?: OptionHandler<ResizeDetail>;
   onResizeEnd?: () => void;
   onLayoutChange: (layout: RequiredLayout) => void;
   onBaseLayoutChange: (layout: RequiredLayout) => void;
@@ -31,26 +38,18 @@ class ResizableDivider extends React.PureComponent<Props, State> {
   handleResize = (mousePosition: MousePosition, oldMousePosition: MousePosition) => {
     const { position, baseLayout, onLayoutChange, onResize, layout } = this.props;
     const baseFatherLayout = this.baseFatherLayout();
-    const moved =
-      baseFatherLayout.direction === 'horizontal'
-        ? mousePosition.x - oldMousePosition.x
-        : mousePosition.y - oldMousePosition.y;
-    const [newFatherLayout] = resizeElement(baseFatherLayout, position.key, moved);
-    const newLayout = cloneNodeWith(baseLayout, (child) => {
-      if (child === baseFatherLayout) {
-        return newFatherLayout;
-      }
-      return undefined;
-    }) as RequiredLayout;
-    if (typeToLayout(newLayout)) {
-      onLayoutChange(newLayout);
-    }
-    onResize?.(newLayout, layout, {
+    const resizeNode = baseFatherLayout.children.find((c) => c.key === position.key);
+    const resizeDetail: ResizeDetail = {
+      layout,
       baseLayout,
       mousePosition,
       oldMousePosition,
-      resizeItemKey: position.key,
-    });
+      resizeWidthNode: baseFatherLayout.direction === 'horizontal' ? resizeNode : undefined,
+      resizeHeightNode: baseFatherLayout.direction === 'vertical' ? resizeNode : undefined,
+    };
+    const newLayout = applyResize(resizeDetail);
+    onLayoutChange(newLayout);
+    onResize?.(newLayout, layout, resizeDetail);
   };
 
   handleResizeEnd = (mousePosition: MousePosition, oldMousePosition) => {

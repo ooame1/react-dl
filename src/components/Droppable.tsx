@@ -1,22 +1,23 @@
 import React, { CSSProperties, DragEventHandler } from 'react';
-import { RequiredLayout, Position, DragDirection, Item, Key } from '../types';
-import { dragElement } from '../utils';
+import {
+  RequiredLayout,
+  Position,
+  DragDirection,
+  DragDetail,
+  RequiredItem,
+  OptionHandler,
+} from '../types';
+import { applyDrag, convertLayoutToFatherLayoutMap } from '../utils';
 import { DraggingData } from './Draggable';
-
-export type DragDetail = {
-  layout: RequiredLayout;
-  draggedItem: Item;
-  targetItemKey: Key;
-  nativeEvent: DragEvent;
-};
 
 type Props = {
   style?: CSSProperties;
   position?: Position;
   layout: RequiredLayout;
+  baseLayout: RequiredLayout;
   onLayoutChange: (layout: RequiredLayout) => void;
   onBaseLayoutChange: (layout: RequiredLayout) => void;
-  onDrag?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: DragDetail) => void;
+  onDrag?: OptionHandler<DragDetail>;
 };
 
 type State = {
@@ -64,24 +65,29 @@ class Droppable extends React.PureComponent<Props, State> {
   };
 
   handleDrop: DragEventHandler = (e) => {
-    const { position, layout, onLayoutChange, onBaseLayoutChange, onDrag } = this.props;
+    const { position, layout, baseLayout, onLayoutChange, onBaseLayoutChange, onDrag } = this.props;
     const { dragDirection } = this.state;
     const draggedItem = DraggingData.item;
     if (!position || !draggedItem || !dragDirection) {
       return;
     }
-    const newLayout = dragElement(layout, draggedItem.key, position.key, dragDirection);
+    const fatherLayoutMap = convertLayoutToFatherLayoutMap(layout);
+    const targetItem = fatherLayoutMap.get(position.key)!.children.find(c => c.key === position.key)! as RequiredItem;
+    const dragDetail: DragDetail = {
+      layout,
+      baseLayout,
+      draggedItem,
+      targetItem,
+      dragDirection,
+      event: e.nativeEvent,
+    };
+    const newLayout = applyDrag(dragDetail);
     onLayoutChange(newLayout);
     onBaseLayoutChange(newLayout);
     this.setState({
       dragDirection: null,
     });
-    onDrag?.(newLayout, layout, {
-      layout,
-      draggedItem,
-      targetItemKey: position.key,
-      nativeEvent: e.nativeEvent,
-    });
+    onDrag?.(newLayout, layout, dragDetail);
   };
 
   createMaskStyle(): CSSProperties {

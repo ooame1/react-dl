@@ -1,11 +1,20 @@
 import React, { CSSProperties, PropsWithChildren, ReactElement, Ref, RefCallback } from 'react';
+import memoize from 'memoize-one';
 import classNames from 'classnames';
-import Droppable, { DragDetail } from './components/Droppable';
+import Droppable from './components/Droppable';
 import Resizable from './components/Resizable';
-import Scalable, { ScaleDetail } from './components/Scalable';
+import Scalable from './components/Scalable';
 import DragItem from './DragItem';
 import { ROOT_LAYOUT_KEY } from './constants';
-import { Layout, Size, PositionMap, Position, RequiredLayout, Key, ResizeDetail } from './types';
+import {
+  Layout,
+  Size,
+  RequiredLayout,
+  ResizeDetail,
+  DragDetail,
+  ScaleDetail,
+  OptionHandler,
+} from './types';
 import { formatLayout, convertLayoutToPositionMap, noop } from './utils';
 
 type Props = {
@@ -20,16 +29,15 @@ type Props = {
   autoSize?: boolean;
   height?: number;
   width?: number;
-  onDrag?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: DragDetail) => void; // 拖拽调整布局
-  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void; // 拖拽调整布局元素尺寸
-  onScale?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ScaleDetail) => void; // 自动填满父窗口
+  onDrag?: OptionHandler<DragDetail>; // 拖拽调整布局
+  onResize?: OptionHandler<ResizeDetail>; // 拖拽调整布局元素尺寸
+  onScale?: OptionHandler<ScaleDetail>; // 自动填满父窗口
 };
 
 type State = {
   baseLayout: RequiredLayout;
   containerShape?: Size;
   layout: RequiredLayout;
-  positionMap: PositionMap;
 };
 
 const emptyLayout: RequiredLayout = {
@@ -52,12 +60,13 @@ class DragLayout extends React.Component<Props, State> {
     onScale: noop,
   };
 
+  createPositionMap = memoize(convertLayoutToPositionMap);
+
   dom: HTMLDivElement | null = null;
 
   state: State = {
     baseLayout: emptyLayout,
     layout: emptyLayout,
-    positionMap: new Map<Key, Position>(),
   };
 
   static getDerivedStateFromProps(
@@ -70,11 +79,9 @@ class DragLayout extends React.Component<Props, State> {
     }
     const layout = formatLayout(nextProps.layout, prevState.containerShape);
     const baseLayout = formatLayout(nextProps.baseLayout, prevState.containerShape);
-    const positionMap = convertLayoutToPositionMap(layout);
     return {
       layout,
       baseLayout,
-      positionMap,
     };
   }
 
@@ -155,14 +162,15 @@ class DragLayout extends React.Component<Props, State> {
 
   processItem(child: ReactElement<any>) {
     const { onDrag } = this.props;
-    const { layout } = this.state;
+    const { layout, baseLayout } = this.state;
     const { handleLayoutChange, handleBaseLayoutChange } = this;
-    const position = this.state.positionMap.get(child.key as string);
+    const position = this.createPositionMap(layout).get(child.key as string);
     return (
       <DragItem key={child.key} position={position}>
         <Droppable
           position={position}
           layout={layout}
+          baseLayout={baseLayout}
           onLayoutChange={handleLayoutChange}
           onBaseLayoutChange={handleBaseLayoutChange}
           onDrag={onDrag}
@@ -175,9 +183,10 @@ class DragLayout extends React.Component<Props, State> {
 
   render() {
     const { children, onScale, onResize } = this.props;
-    const { positionMap, baseLayout, layout } = this.state;
+    const { baseLayout, layout } = this.state;
     const { handleRef, handleLayoutChange, handleBaseLayoutChange, handleContainerShapeChange } =
       this;
+    const positionMap = this.createPositionMap(layout);
 
     return (
       <Scalable

@@ -13,6 +13,9 @@ import {
   Key,
   FatherLayoutMap,
   DragDirection,
+  DragDetail,
+  ResizeDetail,
+  ScaleDetail,
 } from './types';
 
 /**
@@ -26,7 +29,7 @@ export function typeToLayout(node: Layout | Item): node is Layout {
 /**
  * 合并map
  */
-export function assignMap(targetMap: Map<any, any>, ...fromMap: Map<any, any>[]) {
+function assignMap(targetMap: Map<any, any>, ...fromMap: Map<any, any>[]) {
   fromMap.forEach((map) => {
     map.forEach((value, key) => {
       targetMap.set(key, value);
@@ -146,7 +149,7 @@ export function renderPosition(position: Position): CSSProperties {
  *
  * 不修改原对象
  */
-export function cloneItem(item: RequiredItem): RequiredItem {
+function cloneItem(item: RequiredItem): RequiredItem {
   return {
     ...item,
   };
@@ -157,7 +160,7 @@ export function cloneItem(item: RequiredItem): RequiredItem {
  *
  * 不修改原对象
  */
-export function cloneNodeWith(
+function cloneNodeWith(
   node: RequiredLayout | RequiredItem,
   customizer: (
     child: RequiredLayout | RequiredItem
@@ -183,7 +186,7 @@ export function cloneNodeWith(
 /**
  * 根据布局容器的宽和高计算每个子节点的宽和高
  */
-export function getLayoutChildrenShapes(layout: Layout, shape: Size): Array<Size> {
+function getLayoutChildrenShapes(layout: Layout, shape: Size): Array<Size> {
   const direction: Direction = layout.direction || DEFAULT_DIRECTION;
   const children: Layout['children'] = layout.children || [];
   const shapes: Array<Size> = [];
@@ -302,7 +305,7 @@ export function convertLayoutToPositionMap(
  *
  * 不改变原对象
  */
-export function scaleItem(item: RequiredItem, resize: Size): [RequiredItem, Size] {
+function scaleItem(item: RequiredItem, resize: Size): [RequiredItem, Size] {
   const newItem = cloneItem(item);
   const resized: Size = {
     width: 0,
@@ -327,7 +330,7 @@ export function scaleItem(item: RequiredItem, resize: Size): [RequiredItem, Size
  *
  * 不修改原对象
  */
-export function scaleNode(child: RequiredLayout | RequiredItem, resize: Partial<Size>) {
+function scaleNode(child: RequiredLayout | RequiredItem, resize: Partial<Size>) {
   const requiredResize: Size = {
     width: 0,
     height: 0,
@@ -346,7 +349,7 @@ export function scaleNode(child: RequiredLayout | RequiredItem, resize: Partial<
  *
  * 不改变原对象
  */
-export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayout, Size] {
+function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayout, Size] {
   const newLayout: RequiredLayout = {
     ...layout,
     children: [],
@@ -419,7 +422,7 @@ export function scaleLayout(layout: RequiredLayout, resize: Size): [RequiredLayo
  *
  * 不修改原对象
  */
-export function resizeElement(
+function resizeElement(
   fatherLayout: RequiredLayout,
   itemKey: Key,
   dragged: number
@@ -471,7 +474,7 @@ export function resizeElement(
  *
  * 不修改原对象
  */
-export function removeElement(layout: RequiredLayout, removedItemKey: Key): RequiredLayout {
+function removeElement(layout: RequiredLayout, removedItemKey: Key): RequiredLayout {
   const fatherLayoutMap = convertLayoutToFatherLayoutMap(layout);
   const fatherLayout = fatherLayoutMap.get(removedItemKey);
   if (!fatherLayout) {
@@ -494,8 +497,14 @@ export function removeElement(layout: RequiredLayout, removedItemKey: Key): Requ
   let newFatherLayout: RequiredLayout = {
     ...fatherLayout,
     children: fatherLayout.children.filter((c) => c.key !== removedItemKey),
-    width: fatherLayout.direction === 'horizontal' ? fatherLayout.width - removedItem.width : fatherLayout.width,
-    height: fatherLayout.direction === 'vertical' ? fatherLayout.height - removedItem.height : fatherLayout.height,
+    width:
+      fatherLayout.direction === 'horizontal'
+        ? fatherLayout.width - removedItem.width
+        : fatherLayout.width,
+    height:
+      fatherLayout.direction === 'vertical'
+        ? fatherLayout.height - removedItem.height
+        : fatherLayout.height,
   };
   [newFatherLayout] = scaleLayout(newFatherLayout, {
     width: fatherLayout.direction === 'horizontal' ? removedItem.width : 0,
@@ -514,7 +523,7 @@ export function removeElement(layout: RequiredLayout, removedItemKey: Key): Requ
  *
  * 不修改原对象
  */
-export function dragElement(
+function dragElement(
   layout: RequiredLayout,
   draggedItemKey: Key,
   targetItemKey: Key,
@@ -600,6 +609,51 @@ export function dragElement(
     }
     return undefined;
   }) as RequiredLayout;
+}
+
+export function applyScale(scaleDetail: ScaleDetail): RequiredLayout {
+  const { baseLayout, size, oldSize } = scaleDetail;
+  const scale: Size = {
+    width: size.width - oldSize.width,
+    height: size.height - oldSize.height,
+  };
+  return scaleLayout(baseLayout, scale)[0];
+}
+
+export function applyResize(resizeDetail: ResizeDetail): RequiredLayout {
+  const { baseLayout, mousePosition, oldMousePosition, resizeWidthNode, resizeHeightNode } =
+    resizeDetail;
+  let newLayout: RequiredLayout = baseLayout;
+  const resizeWidth = mousePosition.x - oldMousePosition.x;
+  const resizeHeight = mousePosition.y - oldMousePosition.y;
+  if (resizeWidth !== 0 && resizeWidthNode) {
+    const fatherLayoutMap = convertLayoutToFatherLayoutMap(newLayout);
+    const fatherLayout = fatherLayoutMap.get(resizeWidthNode.key)!;
+    const [newFatherLayout] = resizeElement(fatherLayout, resizeWidthNode.key, resizeWidth);
+    newLayout = cloneNodeWith(newLayout, (child) => {
+      if (child === fatherLayout) {
+        return newFatherLayout;
+      }
+      return undefined;
+    }) as RequiredLayout;
+  }
+  if (resizeHeight !== 0 && resizeHeightNode) {
+    const fatherLayoutMap = convertLayoutToFatherLayoutMap(newLayout);
+    const fatherLayout = fatherLayoutMap.get(resizeHeightNode.key)!;
+    const [newFatherLayout] = resizeElement(fatherLayout, resizeHeightNode.key, resizeHeight);
+    newLayout = cloneNodeWith(newLayout, (child) => {
+      if (child === fatherLayout) {
+        return newFatherLayout;
+      }
+      return undefined;
+    }) as RequiredLayout;
+  }
+  return newLayout;
+}
+
+export function applyDrag(dragDetail: DragDetail): RequiredLayout {
+  const { layout, draggedItem, targetItem, dragDirection } = dragDetail;
+  return dragElement(layout, draggedItem.key, targetItem.key, dragDirection);
 }
 
 export const noop = () => {};

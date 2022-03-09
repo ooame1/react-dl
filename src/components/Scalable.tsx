@@ -1,19 +1,13 @@
 import React, { Children, cloneElement, RefCallback } from 'react';
-import { RequiredLayout, Size } from '../types';
-import { scaleLayout } from '../utils';
-
-export type ScaleDetail = {
-  baseLayout: RequiredLayout;
-  size: Size;
-  oldSize: Size;
-};
+import { RequiredLayout, Size, ScaleDetail, OptionHandler } from '../types';
+import { applyScale } from '../utils';
 
 type Props = {
   layout: RequiredLayout;
   baseLayout: RequiredLayout;
   onContainerShapeChange: (containerShape: Size) => void;
   onLayoutChange: (layout: RequiredLayout) => void;
-  onScale?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ScaleDetail) => void;
+  onScale?: OptionHandler<ScaleDetail>;
 };
 
 class Scalable extends React.Component<Props> {
@@ -45,33 +39,26 @@ class Scalable extends React.Component<Props> {
 
   handleScale: ResizeObserverCallback = (entries) => {
     const { layout, baseLayout, onLayoutChange, onContainerShapeChange, onScale } = this.props;
-    const {
-      contentRect: { width, height },
-    } = entries[0];
-    const { width: lastWidth, height: lastHeight } = baseLayout;
-    if (width === lastWidth && height === lastHeight) {
-      return;
-    }
-    const [newLayout] = scaleLayout(baseLayout, {
-      width: width - lastWidth,
-      height: height - lastHeight,
-    });
+    const { contentRect } = entries[0];
+    const scaleDetail: ScaleDetail = {
+      layout,
+      baseLayout,
+      size: {
+        width: contentRect.width,
+        height: contentRect.height,
+      },
+      oldSize: {
+        width: baseLayout.width,
+        height: baseLayout.height,
+      },
+    };
+    const newLayout = applyScale(scaleDetail);
     onLayoutChange(newLayout);
     onContainerShapeChange({
       width: newLayout.width,
       height: newLayout.height,
     });
-    onScale?.(newLayout, layout, {
-      baseLayout,
-      size: {
-        width,
-        height,
-      },
-      oldSize: {
-        width: lastWidth,
-        height: lastHeight,
-      },
-    });
+    onScale?.(newLayout, layout, scaleDetail);
   };
 
   getChild() {

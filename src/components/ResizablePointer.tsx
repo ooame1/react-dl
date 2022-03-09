@@ -7,9 +7,10 @@ import {
   Position,
   RequiredLayout,
   ResizeDetail,
+  OptionHandler,
 } from '../types';
+import { applyResize } from '../utils';
 import ResizableHandler from './ResizableHandler';
-import { cloneNodeWith, convertLayoutToFatherLayoutMap, resizeElement } from '../utils';
 
 type Props = {
   className?: string;
@@ -22,7 +23,7 @@ type Props = {
   onBaseLayoutChange: (layout: RequiredLayout) => void;
   onResizingPositionTupleChange: (positionTuple: [Position, Position] | null) => void;
   onMouseEnterPositionTupleChange: (positionTuple: [Position, Position] | null) => void;
-  onResize?: (layout: RequiredLayout, oldLayout: RequiredLayout, detail: ResizeDetail) => void;
+  onResize?: OptionHandler<ResizeDetail>;
 };
 
 type State = {
@@ -50,32 +51,17 @@ class ResizablePointer extends React.Component<Props, State> {
   handleResize = (mousePosition: MousePosition, oldMousePosition: MousePosition) => {
     const { positionTuple, baseLayout, baseFatherLayoutMap, onLayoutChange, onResize, layout } =
       this.props;
-    const horizontalMoved = mousePosition.x - oldMousePosition.x;
-    const baseFatherLayout = baseFatherLayoutMap.get(positionTuple[0].key)!;
-    const [newFatherLayout] = resizeElement(
-      baseFatherLayout,
-      positionTuple[0].key,
-      horizontalMoved
-    );
-    const newHorizontalLayout = cloneNodeWith(baseLayout, (child) => {
-      if (child === baseFatherLayout) {
-        return newFatherLayout;
-      }
-      return undefined;
-    }) as RequiredLayout;
-    const verticalMoved = mousePosition.y - oldMousePosition.y;
-    const newLayout = this.resizeLayoutElementByPosition(
-      newHorizontalLayout,
-      positionTuple[1],
-      verticalMoved
-    );
-    onLayoutChange(newLayout);
-    onResize?.(newLayout, layout, {
+    const resizeDetail: ResizeDetail = {
+      layout,
       baseLayout,
       mousePosition,
       oldMousePosition,
-      resizeItemKey: [positionTuple[0].key, positionTuple[1].key],
-    });
+      resizeWidthNode: baseFatherLayoutMap.get(positionTuple[0].key)!.children.find(c => c.key === positionTuple[0].key),
+      resizeHeightNode: baseFatherLayoutMap.get(positionTuple[1].key)!.children.find(c => c.key === positionTuple[1].key),
+    };
+    const newLayout = applyResize(resizeDetail);
+    onLayoutChange(newLayout);
+    onResize?.(newLayout, layout, resizeDetail);
   };
 
   handleResizeEnd = () => {
@@ -105,19 +91,6 @@ class ResizablePointer extends React.Component<Props, State> {
       x: positionTuple[0].x + positionTuple[0].width,
       y: positionTuple[1].y + positionTuple[1].height,
     };
-  }
-
-  // eslint-disable-next-line class-methods-use-this
-  resizeLayoutElementByPosition(layout: RequiredLayout, position: Position, moved: number) {
-    const fatherLayoutMap = convertLayoutToFatherLayoutMap(layout);
-    const fatherLayout = fatherLayoutMap.get(position.key)!;
-    const [newFatherLayout] = resizeElement(fatherLayout, position.key, moved);
-    return cloneNodeWith(layout, (child) => {
-      if (child === fatherLayout) {
-        return newFatherLayout;
-      }
-      return undefined;
-    }) as RequiredLayout;
   }
 
   render() {
