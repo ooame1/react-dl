@@ -1,6 +1,6 @@
 {
   "name": "react-dl",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "基于react的可拖拽布局组件",
   "main": "lib/index.js",
   "module": "lib/index",
@@ -9,8 +9,8 @@
     "preversion": "npm run lint",
     "build": "tsc",
     "clean": "rimraf lib",
-    "format": "eslint --fix '{src,example}/**/*.{ts,tsx}'",
-    "lint": "eslint '{src,example}/**/*.{ts,tsx}'",
+    "format": "eslint --fix '{src,example}/**/*.{ts,tsx} --no-error-on-unmatched-pattern'",
+    "lint": "eslint '{src,example}/**/*.{ts,tsx} --no-error-on-unmatched-pattern'",
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
